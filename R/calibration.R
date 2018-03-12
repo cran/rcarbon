@@ -9,7 +9,7 @@
 #' @param calCurves Either a character string naming a calibration curve already provided with the rcarbon package (currently 'intcal13', 'shcal13' and 'marine13' are possible; default is 'intcal13') or a custom calibration curve as three-column matrix or data.frame (calibrated year BP, uncalibrated age bp, standard deviation). Different existing curves can be specified per dated sample, but only one custom curve can be provided for all dates.
 #' @param resOffsets A vector of offset values for any marine reservoir effect (default is no offset).
 #' @param resErrors A vector of offset value errors for any marine reservoir effect (default is no offset).
-#' @param timeRange Earliest and latest data to calibrate for, in calendar years. Posterior probabilites beyond this range will be excluded (the default is sensible in most cases).
+#' @param timeRange Earliest and latest data to calibrate for, in calendar years. Posterior probabilities beyond this range will be excluded (the default is sensible in most cases).
 #' @param normalised A logical variable indicating whether the calibration should be normalised or not. Default is TRUE.
 #' @param eps Cut-off value for density calculation. Default is 1e-5.
 #' @param calMatrix a logical variable indicating whether the age grid should be limited to probabilities higher than \code{eps}
@@ -17,16 +17,18 @@
 #' @param verbose A logical variable indicating whether extra information on progress should be reported. Default is TRUE.
 #' @param ... ignored
 #'
-#' @details This function computes one or more calibrated radiocarbon ages using the method described in Bronk Ramsey 2008 (albeit not in F14C space). It is possible to specify different calibration curves or reservoir offsets individually for each date, and control whether the resulting calibrated distribution is normalised to 1 under-the-curve or not. Calculations can also be executed in parallel to reduce computing time.
+#' @details This function computes one or more calibrated radiocarbon ages using the method described in Bronk Ramsey 2008 (albeit not in F14C space, see also  Parnell 2017). It is possible to specify different calibration curves or reservoir offsets individually for each date, and control whether the resulting calibrated distribution is normalised to 1 under-the-curve or not. Calculations can also be executed in parallel to reduce computing time.
 #'
 #' @return An object of class CalDates with the following elements:
 #' \itemize{
 #' \item{\code{metadata}} {A data.frame containing relevant information regarding each radiocarbon date and the parameter used in the calibration process.}
 #' \item{\code{grids}} {A list of calGrid class objects, containing the posterior probabilities for each calendar year. The most memory-efficient way to store calibrated dates, as only years with non-zero probability are stored, but aggregation methods such as \code{spd()} may then take longer to extract and combine multiple dates. NA when the parameter calMatrix is set to TRUE.} 
-#' \item{\code{calMatrix}} {A matrix of probability values, one row per calendar year in timeRange and one column per date. By storing all possible years, not just those with non-zero probabilty, this approach takes more memory, but speeds up spd() and is suggested whenever the latter is to be used. NA when the parameter calMatrix is set to FALSE.}  
+#' \item{\code{calMatrix}} {A matrix of probability values, one row per calendar year in timeRange and one column per date. By storing all possible years, not just those with non-zero probability, this approach takes more memory, but speeds up spd() and is suggested whenever the latter is to be used. NA when the parameter calMatrix is set to FALSE.}  
 #' }
 #'
-#' @references #' Bronk Ramsey, C. 2008. Radiocarbon dating: revolutions in understanding, \emph{Archaeometry} 50.2: 249-75. DOI: https://doi.org/10.1111/j.1475-4754.2008.00394.x#'
+#' @references 
+#' Bronk Ramsey, C. 2008. Radiocarbon dating: revolutions in understanding, \emph{Archaeometry} 50.2: 249-75. DOI: https://doi.org/10.1111/j.1475-4754.2008.00394.x#'
+#' Parnell, A. 2017. \emph{Bchron: Radiocarbon Dating, Age-Depth Modelling, Relative Sea Level Rate Estimation, and Non-Parametric Phase Modelling}, R package: https://CRAN.R-project.org/package=Bchron #'
 #' @examples
 #' x1 <- calibrate(x=4000, errors=30)
 #' plot(x1)
