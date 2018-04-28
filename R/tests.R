@@ -6,7 +6,7 @@
 #'
 #' @description Comparison of an observed summed radiocarbon date distribution (aka SPD) with simulated outcomes from a theoretical model.
 #'
-#' @param x A vector of radiocarbon ages 
+#' @param x A \code{CalDates} object containing calibrated radiocarbon ages 
 #' @param errors A vector of errors corresponding to each radiocarbon age
 #' @param nsim Number of simulations
 #' @param bins A vector indicating which bin each radiocarbon date is assigned to.
@@ -24,8 +24,10 @@
 #' @param b Starter value for the exponential fit with the \code{\link{nls}} function using the formula \code{y ~ exp(a + b * x)} where \code{y} is the summed probability and \code{x} is the date. Default is 0. 
 #' @param verbose A logical variable indicating whether extra information on progress should be reported. Default is TRUE.
 #'
-#' @details The function implements a modified version of Timpson et al (2014) Monte-Carlo test for comparing a theoretical or fitted statistical model to an observed summed radiocarbon date distribution (aka SPD). A variety of theoretical expectations can be compared to the observed distribution by setting the \code{model} argument, for example to fit basic \code{'uniform'} (the mean of the SPD), \code{'linear'} (fitted using the \code{\link{lm}} function) or \code{model='exponential'} models (fitted using the \code{\link{nls}} function). Models are fitted to the period spanned by \code{timeRange} although \code{x} can contain dates outside this range to mitigate possible edge effects (see also \code{bracket}). Alternatively, it is possible for the user to provide a model of their own by setting \code{model='custom'} and then supplying a two-column data.frame to \code{predgrid}. The chosen model is then 'uncalibrated' (see \code{\link{uncalibrate}}) and \emph{n} radiocarbon ages are randomly drawn, with \emph{n} equivalent to the number of dates or number of unique site/phase bins if the latter are supplied by the \code{bin} argument. The simulated dates are then calibrated and an SPD for each simulation. This process is repeated \code{nsim} times to produce a set of simulated expected probabilities densities per each calendar year. The probabilities are then z-transformed, and a 95\% critical envelope is computed. Local departures from the model are defined as instances where the observed SPD (which is also z-transformed) is outside such an envelope, while an estimate of the global significance of the observed SPD is also computed by comparing the total areas of observed and simulated SPDs that fall outside the simulation envelope. 
-#'
+#' @details The function implements a modified version of Timpson et al (2014) Monte-Carlo test for comparing a theoretical or fitted statistical model to an observed summed radiocarbon date distribution (aka SPD). A variety of theoretical expectations can be compared to the observed distribution by setting the \code{model} argument, for example to fit basic \code{'uniform'} (the mean of the SPD), \code{'linear'} (fitted using the \code{\link{lm}} function) or \code{model='exponential'} models (fitted using the \code{\link{nls}} function). Models are fitted to the period spanned by \code{timeRange} although \code{x} can contain dates outside this range to mitigate possible edge effects (see also \code{bracket}). Alternatively, it is possible for the user to provide a model of their own by setting \code{model='custom'} and then supplying a two-column data.frame to \code{predgrid}. The current implementation of this function uncalibrates the entire fitted distribution and then applies a baseline assumption based on a uniform model. It then samples a new set of new uncalibrated dates, before calibrating them and summing. Other published approaches tend to sample from the fitted calibrated distribution so the resulting envelope is likely to differ slightly, particularly at steep portions of the calibration curve. This process is repeated \code{nsim} times to produce a set of simulated expected probabilities densities per each calendar year. The probabilities are then z-transformed, and a 95\% critical envelope is computed. Local departures from the model are defined as instances where the observed SPD (which is also z-transformed) is outside such an envelope, while an estimate of the global significance of the observed SPD is also computed by comparing the total areas of observed and simulated SPDs that fall outside the simulation envelope.
+
+
+#' @note Windows users might receive a memory allocation error with larger time span of analysis (defined by the parameter \code{timeRange}). This can be avoided by increasing the memory limit with the \code{\link{memory.limit}} function.
 #' @return An object of class \code{SpdModelTest} with the following elements
 #' \itemize{
 #' \item{\code{result}} {A four column data.frame containing the observed probability density (column \emph{PrDens}) and the lower and the upper values of the simulation envelope (columns \emph{lo} and \emph{hi}) for each calendar year column \emph{calBP}}
@@ -160,7 +162,7 @@ modelTest <- function(x, errors, nsim, bins=NA, runm=NA, timeRange=NA, raw=FALSE
     booms2 <- which(finalSPD> hi)
     observedStatistic <- sum(c(zLo[busts] - Zscore_empirical[busts]),c(Zscore_empirical[booms]-zHi[booms]))
     expectedstatistic <- abs(apply(Zsim,2,function(x,y){a=x-y;i=which(a<0);return(sum(a[i]))},y=zLo)) + apply(Zsim,2,function(x,y){a=x-y;i=which(a>0);return(sum(a[i]))},y=zHi)
-    pvalue <- 1 - c(length(expectedstatistic[expectedstatistic <= observedStatistic])+1)/c(length(expectedstatistic)+1)
+    pvalue <- c(length(expectedstatistic[expectedstatistic > observedStatistic])+1)/c(nsim+1)
     # Results
     result <- data.frame(calBP=observed$grid$calBP,PrDens=finalSPD,lo=lo,hi=hi)
     if(raw==FALSE){ sim <- NA }
@@ -495,10 +497,16 @@ SPpermTest<-function(calDates, timeRange, bins, locations, breaks, spatialweight
     {
 	stop("Range of breaks values must much match the temporal range defined by timeRange")
     }
+
+    if (length(unique(abs(diff(breaks))))!=1)
+    {
+	stop("Unequal break intervals is not supported")
+    }
+
    
     if (ncores>1&raw==TRUE)
     {
-	warnings("raw==TRUE available only for ncores=1")
+	warning("raw==TRUE available only for ncores=1")
     	raw=FALSE
     }
 #############################
@@ -667,8 +675,8 @@ SPpermTest<-function(calDates, timeRange, bins, locations, breaks, spatialweight
 	  }
         stopCluster(cl)
 
-        lo=resultHiLoEq[[1]]
-	hi=resultHiLoEq[[2]]
+    hi=resultHiLoEq[[1]]
+	lo=resultHiLoEq[[2]]
 	eq=resultHiLoEq[[3]]
     
 	} else {
@@ -794,8 +802,9 @@ SPpermTest<-function(calDates, timeRange, bins, locations, breaks, spatialweight
 #' @param p1 calendar year (in BP) of start point.
 #' @param p2 calendar year (in BP) of end point.
 #' @param interactive if set to TRUE enables an interactive selection of p1 and p2 from a graphical display of the SPD. Disabled when \code{p1} and \code{p2} are defined.
+#' @param plot if set to TRUE the function plots the location of p1 and p2 on the SPD. Default is FALSE.
 #'
-#' @details The function compares observed differences in the summed probability values associated with two points in time against a distribution of expected values under the null hypothesis defined with the \code{\link{modelTest}} function. The two points can be specified manually (assigning BP dates to the arguments \code{p1} and \code{p2}) or interactively (clicking on a SPD plot). Note that \code{\link{modelTest}} should be executed setting the argument \code{raw} to \code{TRUE} (default is \code{FALSE}.   
+#' @details The function compares observed differences in the summed probability values associated with two points in time against a distribution of expected values under the null hypothesis defined with the \code{\link{modelTest}} function. The two points can be specified manually (assigning BP dates to the arguments \code{p1} and \code{p2}) or interactively (clicking on a SPD plot). Note that \code{\link{modelTest}} should be executed setting the argument \code{raw} to \code{TRUE} (default is \code{FALSE}).   
 #'
 #'
 #' @return A list with: the BP dates for the two points and the p-value obtained from a two-sided test.
@@ -820,7 +829,7 @@ SPpermTest<-function(calDates, timeRange, bins, locations, breaks, spatialweight
 #' @export
 
 
-p2pTest <- function(x,p1=NA,p2=NA,interactive=TRUE)
+p2pTest <- function(x,p1=NA,p2=NA,interactive=TRUE,plot=FALSE)
 {
 
 if (is.na(x$sim[1]))
@@ -865,6 +874,13 @@ if (!interactive)
     p1.y = x$result[index1,2]
     index2=match(p2,x$result$calBP)
     p2.y = x$result[index2,2]
+    if (plot)
+    {	    
+    plot(x)	    
+    points(p1,p1.y,pch=20)    
+    points(p2,p2.y,pch=20)
+    lines(x$result$calBP[index1:index2],x$result$PrDens[index1:index2],lwd=2)
+    }
 }
 
  if (!p1%in%x$result$calBP | !p2%in%x$result$calBP)

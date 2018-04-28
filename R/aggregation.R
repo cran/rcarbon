@@ -15,6 +15,11 @@
 #' @export
 binPrep <- function(sites, ages, h){
     
+    if(any(grepl("_", sites)))
+    {
+        stop("sites should not contain elements with underscores")	
+    }
+    
     clusters <- rep(NA,length(sites))
     
     for  (x in 1:length(unique(sites))){
@@ -53,7 +58,7 @@ binPrep <- function(sites, ages, h){
 #' @references 
 #' Timpson, A., et al, (2014). Reconstructing regional population fluctuations in the European Neolithic using radiocarbon dates: a new case-study using an improved method. Journal of Archaeological Science 52: 549-557. DOI:10.1016/j.jas.2014.08.011
 #'
-#' @seealso \code{\link{calibrate}} for calibrating rardiocabon dates; \code{\link{binPrep}} for preparing bins.
+#' @seealso \code{\link{calibrate}} for calibrating radiocarbon dates; \code{\link{binPrep}} for preparing bins.
 #' @import utils
 #' @export
 

@@ -172,7 +172,7 @@ plot.CalDates <- function(x, ind=1, label=NA, calendar="BP", type="standard", xl
 #' @param drawaxes A logical value determining whether the axes should be displayed or not. Default is TRUE.
 #' @param ... Additional arguments affecting the plot
 
-#' @details The argument \code{bbty} controls the display options of the Monte-Carlo Test. Default settings (\code{bbty='f'}) displays the observed SPD (solid black line), the simulation envelope of the fitted model (shaded grey polygon) and regions of signficance positive (red semi-transparent rectangle) and negative (blue semi-transparent rectangle) deviation. The option \code{bbty='b'} removes the regions of positive/negative deviations, whilst the option \code{bbty='n'} displays the simulation envelope on existing plot. 
+#' @details The argument \code{bbty} controls the display options of the Monte-Carlo Test. Default settings (\code{bbty='f'}) displays the observed SPD (solid black line), the simulation envelope of the fitted model (shaded grey polygon) and regions of significance positive (red semi-transparent rectangle) and negative (blue semi-transparent rectangle) deviation. The option \code{bbty='b'} removes the regions of positive/negative deviations, whilst the option \code{bbty='n'} displays the simulation envelope on existing plot. 
 
 #' @seealso \code{\link{modelTest}}
 #' @import stats
@@ -624,7 +624,7 @@ plot.UncalGrid <- function(x, type="adjusted", fill.p="grey50", border.p=NA, xli
 
 #' @title Plot result of mark permutation test of SPDs
 #'
-#' @description Vsualise the observed SPD along with the simulation envelope generated from \code{\link{permTest}}, with regions of positive and negative deviations highlighted in red and blue.
+#' @description Visualises the observed SPD along with the simulation envelope generated from \code{\link{permTest}}, with regions of positive and negative deviations highlighted in red and blue.
 #'
 #' @param x A \code{SpdPermTest} class object. Result of random mark permutation test (see \code{\link{permTest}})
 #' @param focalm Value specifying the name of the focal mark (group) to be plotted. 
@@ -947,12 +947,16 @@ res=cbind.data.frame(calBP=timeRange[1]:timeRange[2],res)
 #'
 #' @param x A \code{spatialTest} class object
 #' @param index A numerical value indicating which transition to display. Ignored when \code{option="rawlegend"} or  \code{option="testlegend"}. Default is 1.
-#' @param option Indicates what to display. Must be one of "\code{raw}","\code{test}","\code{rawlegend}", and "\code{testlegend}".
+#' @param option Indicates what to display. Either "\code{raw}" (the local growth rate) or "\code{test}" (the test results, i.e. q and p values). 
 #' @param breakRange A vector of length 2 defining the minimum and maximum values of growth rate to be displayed in the legend. If set to NA its computed from data range (default).
 #' @param breakLength A numerical vector defining the number of breaks for growth rates to be displayed in the legend.
 #' @param rd Number of decimal places of the growth rate to be displayed in the Legend
 #' @param baseSize Numerical value giving the amount by which points should be magnified relative to the default settings in R. Default is 0.5
-#' @param legSize Numerical value giving the amount by which points should be magnified relative to the default settings in R for the Legend plot (i.e. when \code{option=rawlegend} or \code{option=rawlegend}. Default is 1. 
+#' @param plim Threshold value for the p-values. Default is 0.05.
+#' @param qlim Threshold value for the q-values. Default is 0.05.
+#' @param legend Logical values specifying whether the legend should be displayed or not. Default is FALSE. 
+#' @param legSize Numerical value giving the amount by which points should be magnified relative to the default settings in R for the Legend. Default is 1.
+#' @param location A single keyword from the list "bottomright", "bottom", "bottomleft", "left", "topleft", "top", "topright", "right" and "center" to specify the location of the Legend. Default is "bottomright".
 #' @param ... Graphical parameters to be passed to methods.
 #'
 #' @details
@@ -966,7 +970,7 @@ res=cbind.data.frame(calBP=timeRange[1]:timeRange[2],res)
 #' @export 
 
 
-plot.spatialTest<-function(x,index=1,option,breakRange=NA,breakLength=7,rd=5,baseSize=0.5,legSize=1,...)
+plot.spatialTest<-function(x,index=1,option,breakRange=NA,breakLength=7,rd=5,baseSize=0.5,plim=0.05,qlim=0.05,legend=FALSE,legSize=1,location="bottomright",...)
 {
 	if (!any(class(x)%in%c("spatialTest")))
 	{
@@ -995,10 +999,7 @@ plot.spatialTest<-function(x,index=1,option,breakRange=NA,breakLength=7,rd=5,bas
 	cols=colorRampPalette(c("blue","white","red"))(breakLength+1)
 	classes=cols[classes]
 	plot(locations,col=classes,pch=20,cex=baseSize,...)
-	}
-
-
-	if (option=="rawlegend")
+	if (legend)
 	{
 	breaks=round(seq(breakRange[1],breakRange[2],length.out=breakLength),rd)
 	cols=colorRampPalette(c("blue","white","red"))(breakLength+1)
@@ -1009,25 +1010,15 @@ plot.spatialTest<-function(x,index=1,option,breakRange=NA,breakLength=7,rd=5,bas
 	 breaksLab[j] = paste(breaks[j-1],"to", breaks[j])
 	 if (j==c(breakLength+1)) {breaksLab[j] = paste(">",breaks[length(breaks)])}
 	}
-	par(mar=c(2,0,2,0))
-        plot(0,0,type="n",axes=F,xlab="",ylab="",ylim=c(0,1),xlim=c(0,1))
-	legend("center",legend=breaksLab,col=cols,pch=20,bty="n",cex=legSize)
-
-        }
-
-
-	if (option=="testlegend")
-	{
-	par(mar=c(2,0,2,0))
-	plot(0,0,type="n",axes=F,xlab="",ylab="",ylim=c(0,1),xlim=c(0,1))
-	l1 = legend("top",title="Negative Deviation",legend=c("p<0.05","q<0.05"),pch=20,col=c("cornflowerblue","darkblue"),bg="white",cex=legSize,bty="n")
-	legend(l1$rect$left, y = with(l1$rect, top - h),title="Positive Deviation",legend=c("p<0.05","q<0.05"),pch=20,col=c("orange","red"),bg="white",cex=legSize,bty="n")
+	legend(location,legend=breaksLab,col=cols,pch=20,bg="white",cex=legSize)
 	}
+	}
+
 
 	if (option=="test")
 	{
 	nBreaks=ncol(x$rocaObs)
-	plusPoints=locations[which(x$pvalHi[,index]>0.5),]
+	plusPoints=locations[which(x$pvalHi[,index]>=0.5),]
 	minusPoints=locations[which(x$pvalHi[,index]<0.5),]
 
 	# Set Base
@@ -1037,13 +1028,13 @@ plot.spatialTest<-function(x,index=1,option,breakRange=NA,breakLength=7,rd=5,bas
 
 
 	# Set Positive
-	positive.index=which(x$pvalLo[,index]<=0.05)
+	positive.index=which(x$pvalHi[,index]<=plim)
 
 	if (length(positive.index)>0)
 		{
 		positive=locations[positive.index,]
 		points(positive,pch=20,col="orange",cex=baseSize)
-		qpositive.index=which(x$qvalLo[,index]<=0.05&x$pvalLo[,index]<=0.05) #Originally based on qvalHi
+		qpositive.index=which(x$qvalHi[,index]<=qlim&x$pvalHi[,index]<=plim) #Originally based on qvalHi
 		if (length(qpositive.index)>0)
 			{
 				qpositive=locations[qpositive.index,]
@@ -1051,13 +1042,13 @@ plot.spatialTest<-function(x,index=1,option,breakRange=NA,breakLength=7,rd=5,bas
 
 			}
 		}
-	negative.index=which(x$pvalHi[,index]<=0.05)
+	negative.index=which(x$pvalLo[,index]<=plim)
 
 	if (length(negative.index)>0)
 		{
 		negative=locations[negative.index,]
 		points(negative,pch=20,col="cornflowerblue",cex=baseSize)
-		qnegative.index=which(x$qvalHi[,index]<=0.05&x$pvalHi[,index]<=0.05) #Originally based on qvalLo
+		qnegative.index=which(x$qvalLo[,index]<=qlim&x$pvalLo[,index]<=plim) #Originally based on qvalLo
 		if (length(qnegative.index)>0)
 			{
 				qnegative=locations[qnegative.index,]
@@ -1066,6 +1057,12 @@ plot.spatialTest<-function(x,index=1,option,breakRange=NA,breakLength=7,rd=5,bas
 			}
 
 		}
+
+	if (legend)
+	{
+	legend(location,legend=c(paste("positive deviation (p<",plim,")",sep=""),paste("positive deviation (q<",qlim,")",sep=""),paste("negative deviation (p<",plim,")",sep=""),paste("negative deviation (q<",qlim,")",sep="")),pch=20, col=c("orange","red","cornflowerblue","darkblue"),bg="white",cex=legSize)
+	}
+
 	}
 
 }
@@ -1073,6 +1070,7 @@ plot.spatialTest<-function(x,index=1,option,breakRange=NA,breakLength=7,rd=5,bas
 
 
 #' @title Plot \code{spdGG} class objects 
+#'
 #' @description Plot calibrated geometric growth rates.
 #' @param x \code{spdGG} class object containing geometric growth rates.
 #' @param ... Additional arguments affecting the plot. 
