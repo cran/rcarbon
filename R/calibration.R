@@ -90,7 +90,7 @@ calibrate.default <- function(x, errors, ids=NA, dateDetails=NA, calCurves='intc
         cclist <- vector(mode="list", length=length(tmp))
         names(cclist) <- tmp
         for (a in 1:length(tmp)){
-            calCurveFile <- paste(system.file("extdata", package="rcarbon"), "/", tmp[1],".14c", sep="")
+            calCurveFile <- paste(system.file("extdata", package="rcarbon"), "/", tmp[a],".14c", sep="")
             options(warn=-1)
             cctmp <- readLines(calCurveFile, encoding="UTF-8")
             cctmp <- cctmp[!grepl("[#]",cctmp)]
@@ -300,7 +300,7 @@ uncalibrate.default <- function(x, CRAerrors=NA, roundyear=TRUE, calCurves='intc
             stop("The custom calibration curve must have just three numeric columns.")
         } else {
             colnames(calcurve) <- c("CALBP","C14BP","Error")
-            if (max(calcurve[,2]) < max(x) | min(calcurve[,2]) > min(x)){
+            if (max(calcurve[,1]) < max(x) | min(calcurve[,1]) > min(x)){
                 stop("The custom calibration curve does not cover the input age range.")
             }
         }
@@ -339,7 +339,7 @@ uncalibrate.CalGrid <- function(x, calCurves='intcal13', eps=1e-5, compact=TRUE,
             stop("The custom calibration curve must have just three numeric columns.")
         } else {
             colnames(calcurve) <- c("CALBP","C14BP","Error")
-            if (max(calcurve[,2]) < max(x) | min(calcurve[,2]) > min(x)){
+            if (max(calcurve[,1]) < max(x$calBP) | min(calcurve[,1]) > min(x$calBP)){
                 stop("The custom calibration curve does not cover the input age range.")
             }
         }
@@ -354,7 +354,7 @@ uncalibrate.CalGrid <- function(x, calCurves='intcal13', eps=1e-5, compact=TRUE,
         options(warn=0)
         colnames(calcurve) <- c("CALBP","C14BP","Error")
     }
-    mycras <- uncalibrate(x$calBP)
+    mycras <- uncalibrate(x$calBP,calCurves=calCurves)
     res <- data.frame(CRA=max(calcurve[,2]):min(calcurve[,2]), PrDens=0)
     tmp <- vector(mode="list",length=nrow(mycras))
     basetmp <- vector(mode="list",length=nrow(mycras))

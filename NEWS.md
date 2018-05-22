@@ -1,5 +1,11 @@
 
-# Version 1.1.1 (28 April 2017)
+# Version 1.1.2 (22 May 2018)
+* Bug Fix in `calibrate()`: calibration of multiple dates with different calibration curves was based on the calibration curve of the first sample.
+* Bug Fix in  `modelTest()`: back-calibration routine was ignoring  user-supplied calibration curve and was solely using "intcal13". 
+* UPDATE: `modelTest()` now allows for two distinct procedures for generating random dates from fitted models.
+* Minor corrections (e.g. typos) in the help documentation.
+
+# Version 1.1.1 (28 April 2018)
 * Added a Vignette.
 * Added normally-distributed (non-14C) age in `calibrate()`.
 * Fixed a bug in `SPpermTest()` generating opposite results (positive deviations were recorded as negative deviations) when `ncores` was larger than 1.  
