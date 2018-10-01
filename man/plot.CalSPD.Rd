@@ -4,10 +4,11 @@
 \alias{plot.CalSPD}
 \title{Plot a summed probability distribution}
 \usage{
-\method{plot}{CalSPD}(x, runm = NA, calendar = "BP", type = "standard",
-  xlim = NA, ylim = NA, ylab = "Summed Probability",
-  spdnormalised = FALSE, rescale = FALSE, fill.p = "grey75",
-  border.p = NA, xaxt = "s", yaxt = "s", add = FALSE, ...)
+\method{plot}{CalSPD}(x, runm = NA, calendar = "BP",
+  type = "standard", xlim = NA, ylim = NA,
+  ylab = "Summed Probability", spdnormalised = FALSE,
+  rescale = FALSE, fill.p = "grey75", border.p = NA, xaxt = "s",
+  yaxt = "s", add = FALSE, ...)
 }
 \arguments{
 \item{x}{A \code{CalSPD} class object.}
@@ -18,7 +19,7 @@
 
 \item{type}{Either \code{'standard'} or \code{'simple'}. The former visualise the SPD as an area graph, while the latter as line chart.}
 
-\item{xlim}{the x limits of the plot.}
+\item{xlim}{the x limits of the plot. In BP or in BC/AD depending on the choice of the parameter \code{calender}. Notice that if BC/AD is selected BC ages should have a minus sign (e.g. \code{c(-5000,200)} for 5000 BC to 200 AD).}
 
 \item{ylim}{the y limits of the plot.}
 

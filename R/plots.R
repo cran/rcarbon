@@ -1,4 +1,5 @@
 #' @title Plot calibrated dates
+#'
 #' @description Plot calibrated radiocarbon dates.
 #' @param x \code{CalDates} class object containing calibrated radiocarbon dates.
 #' @param ind Number indicating the index value of the calibrated radiocarbon date to be displayed. Default is 1.
@@ -57,9 +58,13 @@ plot.CalDates <- function(x, ind=1, label=NA, calendar="BP", type="standard", xl
         xvals <- c(plotyears[1],plotyears,plotyears[length(plotyears)], plotyears[1])
         if (is.na(xlab)){ xlabel <- "Years cal BP" } else { xlabel <- xlab } 
     } else if (calendar=="BCAD"){
-        plotyears <- 1950-yearsBP
+        plotyears <- BPtoBCAD(yearsBP)
         xvals <- c(plotyears[1],plotyears,plotyears[length(plotyears)], plotyears[1])
-        if (is.na(xlab)){ xlabel <- "Years BC/AD" } else { xlabel <- xlab }       
+        if (is.na(xlab)){ 
+		xlabel <- "Years BC/AD"
+		if (all(range(plotyears)<0)) {xlabel <- "Years BC"}
+		if (all(range(plotyears)>0)) {xlabel <- "Years AD"}
+	} else { xlabel <- xlab }       
     } else {
         stop("Unknown calendar type")
     }
@@ -81,7 +86,7 @@ plot.CalDates <- function(x, ind=1, label=NA, calendar="BP", type="standard", xl
       if (any(xticksLab==0)){xticksLab[which(xticksLab==0)]=1}
       xticks[which(xticks>1)]=xticks[which(xticks>1)]-1
     }
-    axis(1, at=xticks, labels=xticksLab, las=2, cex.axis=0.75)
+    axis(1, at=xticks, labels=abs(xticksLab), las=2, cex.axis=0.75)
     
     if (axis4){ axis(4, cex.axis=0.75) }
     if (!HPD){
@@ -130,7 +135,9 @@ plot.CalDates <- function(x, ind=1, label=NA, calendar="BP", type="standard", xl
                 options(warn=-1)
                 cc <- readLines(calCurveFile, encoding="UTF-8")
                 cc <- cc[!grepl("[#]",cc)]
-                cc <- read.csv(textConnection(cc), header=FALSE, stringsAsFactors=FALSE)
+		cc.con <- textConnection(cc)
+                cc <- read.csv(cc.con, header=FALSE, stringsAsFactors=FALSE)
+		close(cc.con)
                 options(warn=0)
                 names(cc) <- c("BP","CRA","Error","D14C","Sigma")
             }
@@ -162,7 +169,7 @@ plot.CalDates <- function(x, ind=1, label=NA, calendar="BP", type="standard", xl
 #'
 #' @param x A \code{SpdModelTest} class object generated using the \code{\link{modelTest}} function.
 #' @param calendar Either \code{'BP'} or \code{'BCAD'}. Indicate whether the calibrated date should be displayed in BP or BC/AD. Default is  \code{'BP'}.
-#' @param xlim the x limits of the plot.
+#' @param xlim the x limits of the plot. In BP or in BC/AD depending on the choice of the parameter \code{calender}. Notice that if BC/AD is selected BC ages should have a minus sign (e.g. \code{c(-5000,200)} for 5000 BC to 200 AD).
 #' @param ylim the y limits of the plot.
 #' @param col.obs Line colour for the observed SPD
 #' @param lwd.obs Line width for the observed SPD
@@ -189,9 +196,10 @@ plot.SpdModelTest <- function(x, calendar="BP", ylim=NA, xlim=NA, col.obs="black
         xlabel <- "Years cal BP"
         if (any(is.na(xlim))){ xlim <- c(max(obs$Years),min(obs$Years)) }
     } else if (calendar=="BCAD"){
-        obs$Years <- 1950-obs$calBP
-        xlabel <- "Years BC/AD"
-        if (any(is.na(xlim))){ xlim <- c(min(obs$Years),max(obs$Years)) }
+        obs$Years <- BPtoBCAD(obs$calBP)
+	if (all(range(obs$Years)<0)){xlabel <- "Years BC"}
+	if (all(range(obs$Years)>0)){xlabel <- "Years AD"}
+        if (any(is.na(xlim))){xlim <- c(min(obs$Years),max(obs$Years)) }
     } else {
         stop("Unknown calendar type")
     }    
@@ -280,7 +288,7 @@ plot.SpdModelTest <- function(x, calendar="BP", ylim=NA, xlim=NA, col.obs="black
     if (drawaxes & bbty != "n" & calendar=="BP"){
 	rr <- range(pretty(obs[,"Years"]))    
         axis(side=1,at=seq(rr[2],rr[1],-100),labels=NA,tck = -.01)
-        axis(side=1,at=pretty(obs[,"Years"]))
+        axis(side=1,at=pretty(obs[,"Years"]),labels=abs(pretty(obs[,"Years"])))
     } else if (drawaxes & bbty != "n" & calendar=="BCAD"){
 	yy <-  obs[,"Years"]
        
@@ -293,7 +301,7 @@ plot.SpdModelTest <- function(x, calendar="BP", ylim=NA, xlim=NA, col.obs="black
 	pyShown <- py
 	if (any(pyShown==0)){pyShown[which(pyShown==0)]=1}
 	py[which(py>1)] <-  py[which(py>1)]-1
-	axis(side=1,at=py,labels=pyShown)
+	axis(side=1,at=py,labels=abs(pyShown))
     }
 
     bbp <- list(booms=boomBlocks, busts=bustBlocks)
@@ -398,7 +406,7 @@ barCodes <- function(x, yrng=c(0,0.03), width=20, col=rgb(0,0,0,25,maxColorValue
 #' @param runm A number indicating the window size of the moving average to smooth the SPD. If set to \code{NA} no moving average is applied. Default is NA  
 #' @param calendar Either \code{'BP'} or \code{'BCAD'}. Indicate whether the calibrated date should be displayed in BP or BC/AD. Default is  \code{'BP'}.
 #' @param type Either \code{'standard'} or \code{'simple'}. The former visualise the SPD as an area graph, while the latter as line chart. 
-#' @param xlim the x limits of the plot.
+#' @param xlim the x limits of the plot. In BP or in BC/AD depending on the choice of the parameter \code{calender}. Notice that if BC/AD is selected BC ages should have a minus sign (e.g. \code{c(-5000,200)} for 5000 BC to 200 AD).
 #' @param ylim the y limits of the plot.
 #' @param ylab (optional) Label for the y axis. If unspecified the default setting will be applied ("Summed Probability") 
 #' @param spdnormalised A logical variable indicating whether the total probability mass of the SPD is normalised to sum to unity. 
@@ -451,8 +459,10 @@ plot.CalSPD <- function(x, runm=NA, calendar="BP", type="standard", xlim=NA, yli
         xlabel <- "Years cal BP"
         if (any(is.na(xlim))){ xlim <- c(max(plotyears),min(plotyears)) }
     } else if (calendar=="BCAD"){
-        plotyears <- 1950-x$grid$calBP
+        plotyears <- BPtoBCAD(x$grid$calBP)
         xlabel <- "Years BC/AD"
+	if (all(range(plotyears)<0)){xlabel <- "Years BC"}
+	if (all(range(plotyears)>0)){xlabel <- "Years AD"}
         if (any(is.na(xlim))){ xlim <- c(min(plotyears),max(plotyears)) }
     } else {
         stop("Unknown calendar type")
@@ -477,7 +487,7 @@ plot.CalSPD <- function(x, runm=NA, calendar="BP", type="standard", xlim=NA, yli
     if (calendar=="BP" & xaxt!="n"){
 	rr <- range(pretty(plotyears))    
         axis(side=1,at=seq(rr[2],rr[1],-100),labels=NA,tck = -.01)
-        axis(side=1,at=pretty(plotyears))
+        axis(side=1,at=pretty(plotyears),labels=abs(pretty(plotyears)))
     } else if (calendar=="BCAD" & xaxt!="n"){
 	yy <-  plotyears
         rr <- range(pretty(yy))    
@@ -488,7 +498,7 @@ plot.CalSPD <- function(x, runm=NA, calendar="BP", type="standard", xlim=NA, yli
 	pyShown <- py
 	if (any(pyShown==0)){pyShown[which(pyShown==0)]=1}
 	py[which(py>1)] <-  py[which(py>1)]-1
-	axis(side=1,at=py,labels=pyShown)
+	axis(side=1,at=py,labels=abs(pyShown))
     }
 }
 
@@ -502,7 +512,7 @@ plot.CalSPD <- function(x, runm=NA, calendar="BP", type="standard", xlim=NA, yli
 #' @param calendar Either \code{'BP'} or \code{'BCAD'}. Indicate whether the calibrated date should be displayed in BP or BC/AD. Default is  \code{'BP'}.
 #' @param fill.p Fill colour of the polygon depicting the summed probability distribution.
 #' @param border.p Border colour of the polygon depicting the summed probability distribution.
-#' @param xlim Adjust x axis limits.
+#' @param xlim the x limits of the plot. In BP or in BC/AD depending on the choice of the parameter \code{calender}. Notice that if BC/AD is selected BC ages should have a minus sign (e.g. \code{c(-5000,200)} for 5000 BC to 200 AD).
 #' @param ylim Adjust y axis limits (otherwise sensible default).
 #' @param cex.lab Size of label text.
 #' @param cex.axis Size of axis text.
@@ -540,9 +550,11 @@ plot.CalGrid <- function(x, runm=NA, calendar="BP", fill.p="grey50", border.p=NA
         xvals <- c(plotyears[1],plotyears,plotyears[length(plotyears)], plotyears[1])
         xlabel <- "Years cal BP"
     } else if (calendar=="BCAD"){
-        plotyears <- 1950-yearsBP
+        plotyears <- BPtoBCAD(yearsBP)
         xvals <- c(plotyears[1],plotyears,plotyears[length(plotyears)], plotyears[1])
         xlabel <- "Years BC/AD"
+	if (all(range(plotyears)<0)){xlabel<-"Years BC"}
+	if (all(range(plotyears)>0)){xlabel<-"Years AD"}
     } else {
         stop("Unknown calendar type")
     }
@@ -569,7 +581,7 @@ plot.CalGrid <- function(x, runm=NA, calendar="BP", fill.p="grey50", border.p=NA
         xticks[which(xticks>1)]=xticks[which(xticks>1)]-1
     }
     if (!add){
-        axis(1, at=xticks, labels=xticksLab, las=2, cex.axis=cex.axis)
+        axis(1, at=xticks, labels=abs(xticksLab), las=2, cex.axis=cex.axis)
         axis(2, cex.axis=cex.axis)
     }
     if (!is.na(runm)){ yvals <- runMean(yvals, runm, edge="fill") }
@@ -629,7 +641,7 @@ plot.UncalGrid <- function(x, type="adjusted", fill.p="grey50", border.p=NA, xli
 #' @param x A \code{SpdPermTest} class object. Result of random mark permutation test (see \code{\link{permTest}})
 #' @param focalm Value specifying the name of the focal mark (group) to be plotted. 
 #' @param calendar Either \code{'BP'} or \code{'BCAD'}. Indicate whether the calibrated date should be displayed in BP or BC/AD. Default is  \code{'BP'}.
-#' @param xlim the x limits of the plot.
+#' @param xlim the x limits of the plot. In BP or in BC/AD depending on the choice of the parameter \code{calender}. Notice that if BC/AD is selected BC ages should have a minus sign (e.g. \code{c(-5000,200)} for 5000 BC to 200 AD).
 #' @param ylim the y limits of the plot.
 #' @param col.obs Line colour for the observed SPD
 #' @param col.env Colour for the simulation envelope
@@ -655,8 +667,9 @@ plot.SpdPermTest <- function(x, focalm="1", calendar="BP", xlim=NA, ylim=NA, col
         xlabel <- "Years cal BP"
         if (any(is.na(xlim))){ xlim <- c(max(obs$Years),min(obs$Years)) }
     } else if (calendar=="BCAD"){
-        obs$Years <- 1950-obs$calBP
-        xlabel <- "Years BC/AD"
+        obs$Years <- BPtoBCAD(obs$calBP)
+	if (all(range(obs$Years)<0)){xlabel <- "Years BC"}
+	if (all(range(obs$Years)>0)){xlabel <- "Years AD"}
         if (any(is.na(xlim))){ xlim <- c(min(obs$Years),max(obs$Years)) }
     } else {
         stop("Unknown calendar type")
@@ -752,7 +765,7 @@ plot.SpdPermTest <- function(x, focalm="1", calendar="BP", xlim=NA, ylim=NA, col
     if (drawaxes & bbty != "n" & calendar=="BP"){
 	rr <- range(pretty(obs[,"Years"]))    
         axis(side=1,at=seq(rr[2],rr[1],-100),labels=NA,tck = -.01)
-        axis(side=1,at=pretty(obs[,"Years"]))
+        axis(side=1,at=pretty(obs[,"Years"]),labels=abs(pretty(obs[,"Years"])))
     } else if (drawaxes & bbty != "n" & calendar=="BCAD"){
 	yy <-  obs[,"Years"]
 	rr <- range(pretty(yy))    
@@ -764,7 +777,7 @@ plot.SpdPermTest <- function(x, focalm="1", calendar="BP", xlim=NA, ylim=NA, col
 	pyShown <- py
 	if (any(pyShown==0)){pyShown[which(pyShown==0)]=1}
 	py[which(py>1)] <-  py[which(py>1)]-1
-	axis(side=1,at=py,labels=pyShown)
+	axis(side=1,at=py,labels=abs(pyShown))
     }
     bbp <- list(booms=boomBlocks, busts=bustBlocks)
     class(bbp) <- c("BBPolygons",class(bbp))
@@ -830,12 +843,11 @@ bbpolygons <- function(x, baseline=1, height=1, calendar="BP", border=NA, bg=NA,
 #' @description Visually explores how choosing different values for \code{h} in the \code{\link{binPrep}} function affects the shape of the SPD.
 #' 
 #' @param x A \code{CalDates} class object containing calibrated radiocarbon dates.
-#' @param y A data.frame containing the radiocarbon ages and the site ID for each date.
+#' @param y A vector containing the locations ID (e.g. site ID) of each calibrated date to be used for the binning process. 
 #' @param h A vector of numbers containing values for the \code{h} parameter to be used in the \code{\link{binPrep}} function. 
 #' @param timeRange A vector of length 2 indicating the start and end date of the analysis in cal BP.
 #' @param calendar Either \code{'BP'} or \code{'BCAD'}. Indicate whether the calibrated date should be displayed in BP or BC/AD. Default is  \code{'BP'}.
-#' @param sitecol Column name in \code{y} where Site IDs are stored.
-#' @param agecol Column name in \code{y} where radiocarbon ages are stored.
+#' @param binning  Either \code{'CRA'} or \code{'calibrated'}. Indicate whether the binning should be carried usinig the  14C age or using the median calibrated date. Default is \code{'CRA'}.
 #' @param raw A logical variable indicating whether all  SPDs should be returned or not. Default is FALSE.
 #' @param verbose A logical variable indicating whether extra information on progress should be reported. Default is TRUE.
 #' @param legend A logical variable indicating whether the legend should be displayed. Default is TRUE
@@ -848,8 +860,7 @@ bbpolygons <- function(x, baseline=1, height=1, calendar="BP", border=NA, bg=NA,
 #' #subset Danish dates
 #' denmark=subset(euroevol,Country=="Denmark")
 #' denmarkDates=calibrate(x=denmark$C14Age,errors=denmark$C14SD)
-#' binsense(x=denmarkDates,y=denmark,h=seq(0,200,20),timeRange=c(10000,4000),
-#' sitecol="SiteID",agecol="C14Age",runm=200)
+#' binsense(x=denmarkDates,y=denmark$SiteID,h=seq(0,200,20),timeRange=c(10000,4000),runm=200)
 #' }
 
 #' @import stats
@@ -858,22 +869,31 @@ bbpolygons <- function(x, baseline=1, height=1, calendar="BP", border=NA, bg=NA,
 #' @import utils
 #' @export
 
-binsense <- function(x,y,h,timeRange,calendar="BP",sitecol,agecol,raw=F,verbose=T,legend=T,...)
+binsense <- function(x,y,h,timeRange,calendar="BP",binning='CRA',raw=F,verbose=T,legend=T,...)
 {
   if (!calendar %in% c("BP","BCAD")){ stop("Unknown calendar type") }
-  	
+  if (!binning %in% c("CRA","calibrated")) {stop("binning should be either 'CRA' or 'calibrated'")} 	
   years <- timeRange[1]:timeRange[2]
-  xlab <- "Years BP"
+  xlab <- "Years cal BP"
   coln <- numeric(length=length(h))
   xr <- timeRange
   if (calendar=="BCAD")
   {
-   years <- 1950 - years
+   years <- BPtoBCAD(years)
    xlab <- "Years BC/AD"
    xr <- range(years)
+   if (all(xr<0)){xlab <- "Years BC"}
+   if (all(xr>0)){xlab <- "Years AD"}
   }
 
   res <- matrix(NA,nrow=length(years),ncol=length(h))
+  craAges <- x$metadata$CRA
+  
+  if (length(craAges)!=length(y))
+  {
+    stop("x and y have different lengths (each calibrated date in x should have a matching location in y)")
+  }
+
 
   if (verbose)
 	 {
@@ -884,7 +904,8 @@ binsense <- function(x,y,h,timeRange,calendar="BP",sitecol,agecol,raw=F,verbose=
   for (b in 1:length(h))
     {
     if (verbose){setTxtProgressBar(pb, b)}	    
-    bins <- binPrep(sites=y[,sitecol],ages=y[,agecol],h=h[b])
+    if (binning == "CRA"){bins <- binPrep(sites=y,ages=craAges,h=h[b])}
+    if (binning == "calibrated"){ bins <- binPrep(sites=y,ages=x,h=h[b])}
     spdtmp <- spd(x,bins= bins,timeRange=timeRange,spdnormalised=T,verbose=F,...)
     res[,b] <- spdtmp$grid$PrDens
     coln[b] <- paste("h.",h[b],sep="")
@@ -906,7 +927,7 @@ binsense <- function(x,y,h,timeRange,calendar="BP",sitecol,agecol,raw=F,verbose=
    xticksLab=xticksAt
    if (any(xticksLab==0)){xticksLab[which(xticksLab==0)]=1}
    if (any(xticksAt>1)){xticksAt[which(xticksAt>1)]=xticksAt[which(xticksAt>1)]-1}
-   axis(side=1,at=xticksAt,labels=xticksLab)
+   axis(side=1,at=xticksAt,labels=abs(xticksLab))
   }  
 
 
@@ -1073,6 +1094,7 @@ plot.spatialTest<-function(x,index=1,option,breakRange=NA,breakLength=7,rd=5,bas
 #'
 #' @description Plot calibrated geometric growth rates.
 #' @param x \code{spdGG} class object containing geometric growth rates.
+#' @param calendar Either \code{'BP'} or \code{'BCAD'}. Indicate whether the calibrated date should be displayed in BP or BC/AD. Default is  \code{'BP'}.
 #' @param ... Additional arguments affecting the plot. 
 #'
 #' @seealso \code{\link{spd2gg}}
@@ -1083,14 +1105,24 @@ plot.spatialTest<-function(x,index=1,option,breakRange=NA,breakLength=7,rd=5,bas
 #' @import utils
 #' @export  
 
-plot.spdGG<- function(x,...)
+plot.spdGG<- function(x,calendar="BP",...)
 {
 	breaks=x$breaks
 	obs=x$sumblock
 	res=x$geomg
 	par(mar=c(4,4,4,4))
-	nn = paste(breaks[-length(breaks)],breaks[-1],sep="-")
-	barplot(x$sumblock,names.arg=nn,ylab="Summed Probability",,space=0,col="bisque3",border=NA,...)
+	nn = paste(breaks[-length(breaks)],breaks[-1],sep=" to ")
+	xxlab="Years cal BP"
+	if (calendar=="BCAD")
+	{
+		bcad.breaks=BPtoBCAD(breaks)
+		nn = paste(abs(bcad.breaks[-length(bcad.breaks)]),abs(bcad.breaks[-1]),sep="-")
+		xxlab="Years BC/AD"
+		if (all(range(bcad.breaks)<0)){xxlab="Years BC"}
+		if (all(range(bcad.breaks)>0)){xxlab="Years AD"}
+
+	}
+	barplot(x$sumblock,names.arg=nn,ylab="Summed Probability",,space=0,col="bisque3",border=NA,xlab=xxlab,...)
 	par(new=T)
 	xx = 1:c(length(nn)-1)
 	plot(0,0,xlim=c(0,length(nn)),ylim=range(res),axes=FALSE,xlab="",ylab="",type="n")

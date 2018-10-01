@@ -4,9 +4,10 @@
 \alias{plot.CalGrid}
 \title{Plot a summed probability distribution (from a CalGrid object)}
 \usage{
-\method{plot}{CalGrid}(x, runm = NA, calendar = "BP", fill.p = "grey50",
-  border.p = NA, xlim = NA, ylim = NA, cex.lab = 0.75,
-  cex.axis = cex.lab, mar = c(4, 4, 1, 3), add = FALSE, ...)
+\method{plot}{CalGrid}(x, runm = NA, calendar = "BP",
+  fill.p = "grey50", border.p = NA, xlim = NA, ylim = NA,
+  cex.lab = 0.75, cex.axis = cex.lab, mar = c(4, 4, 1, 3),
+  add = FALSE, ...)
 }
 \arguments{
 \item{x}{A "CalGrid" class object of summed probabilities per calendar year BP.}
@@ -19,7 +20,7 @@
 
 \item{border.p}{Border colour of the polygon depicting the summed probability distribution.}
 
-\item{xlim}{Adjust x axis limits.}
+\item{xlim}{the x limits of the plot. In BP or in BC/AD depending on the choice of the parameter \code{calender}. Notice that if BC/AD is selected BC ages should have a minus sign (e.g. \code{c(-5000,200)} for 5000 BC to 200 AD).}
 
 \item{ylim}{Adjust y axis limits (otherwise sensible default).}
 

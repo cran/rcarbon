@@ -94,7 +94,9 @@ calibrate.default <- function(x, errors, ids=NA, dateDetails=NA, calCurves='intc
             options(warn=-1)
             cctmp <- readLines(calCurveFile, encoding="UTF-8")
             cctmp <- cctmp[!grepl("[#]",cctmp)]
-            cctmp <- as.matrix(read.csv(textConnection(cctmp), header=FALSE, stringsAsFactors=FALSE))[,1:3]
+	    cctmp.con <- textConnection(cctmp)
+            cctmp <- as.matrix(read.csv(cctmp.con, header=FALSE, stringsAsFactors=FALSE))[,1:3]
+	    close(cctmp.con)
             options(warn=0)
             colnames(cctmp) <- c("CALBP","C14BP","Error")
             cclist[[tmp[a]]] <- cctmp
@@ -217,7 +219,9 @@ calibrate.UncalGrid <- function(x, errors=0, calCurves='intcal13', timeRange=c(5
         options(warn=-1)
         calcurve <- readLines(calCurveFile, encoding="UTF-8")
         calcurve <- calcurve[!grepl("[#]",calcurve)]
-        calcurve <- as.matrix(read.csv(textConnection(calcurve), header=FALSE, stringsAsFactors=FALSE))[,1:3]
+	calcurve.con <- textConnection(calcurve)
+        calcurve <- as.matrix(read.csv(calcurve.con, header=FALSE, stringsAsFactors=FALSE))[,1:3]
+	close(calcurve.con)
         options(warn=0)
         colnames(calcurve) <- c("CALBP","C14BP","Error")
     } else {
@@ -290,7 +294,7 @@ uncalibrate <- function (x, ...) {
 #' @rdname uncalibrate
 #' @export
 
-uncalibrate.default <- function(x, CRAerrors=NA, roundyear=TRUE, calCurves='intcal13', ...){
+uncalibrate.default <- function(x, CRAerrors=0, roundyear=TRUE, calCurves='intcal13', ...){
     
     if (length(CRAerrors)==1){ CRAerrors <- rep(CRAerrors,length(x)) } 
     ## calCurve checks and set-up
@@ -311,7 +315,9 @@ uncalibrate.default <- function(x, CRAerrors=NA, roundyear=TRUE, calCurves='intc
         options(warn=-1)
         calcurve <- readLines(calCurveFile, encoding="UTF-8")
         calcurve <- calcurve[!grepl("[#]",calcurve)]
-        calcurve <- as.matrix(read.csv(textConnection(calcurve), header=FALSE, stringsAsFactors=FALSE))[,1:3]
+	calcurve.con <- textConnection(calcurve)
+        calcurve <- as.matrix(read.csv(calcurve.con, header=FALSE, stringsAsFactors=FALSE))[,1:3]
+	close(calcurve.con)
         options(warn=0)
         colnames(calcurve) <- c("CALBP","C14BP","Error")
     }
@@ -319,7 +325,8 @@ uncalibrate.default <- function(x, CRAerrors=NA, roundyear=TRUE, calCurves='intc
     colnames(dates) <- c("calBP", "ccCRA")
     calcurve.error <- approx(calcurve[,c(1,3)], xout=dates$calBP)$y
     dates$ccError <- calcurve.error
-    dates$rCRA <- rnorm(nrow(dates), mean=dates$ccCRA, sd=dates$ccError)
+#     dates$rCRA <- rnorm(nrow(dates), mean=dates$ccCRA, sd=dates$ccError)
+    dates$rCRA <- rnorm(nrow(dates), mean=dates$ccCRA, sd=sqrt(dates$ccError^2+CRAerrors^2))
     dates$rError <- CRAerrors
     if (roundyear){ dates$rCRA <- round(dates$rCRA) }
     return(dates)
@@ -350,7 +357,9 @@ uncalibrate.CalGrid <- function(x, calCurves='intcal13', eps=1e-5, compact=TRUE,
         options(warn=-1)
         calcurve <- readLines(calCurveFile, encoding="UTF-8")
         calcurve <- calcurve[!grepl("[#]",calcurve)]
-        calcurve <- as.matrix(read.csv(textConnection(calcurve), header=FALSE, stringsAsFactors=FALSE))[,1:3]
+	calcurve.con <- textConnection(calcurve)
+        calcurve <- as.matrix(read.csv(calcurve.con, header=FALSE, stringsAsFactors=FALSE))[,1:3]
+	close(calcurve.con)
         options(warn=0)
         colnames(calcurve) <- c("CALBP","C14BP","Error")
     }
@@ -430,7 +439,9 @@ as.CalDates <- function(x){
         options(warn=-1)
         cctmp <- readLines(calCurveFile, encoding="UTF-8")
         cctmp <- cctmp[!grepl("[#]",cctmp)]
-        cctmp <- as.matrix(read.csv(textConnection(cctmp), header=FALSE, stringsAsFactors=FALSE))[,1]
+	cctmp.con <- textConnection(cctmp)
+        cctmp <- as.matrix(read.csv(cctmp.con, header=FALSE, stringsAsFactors=FALSE))[,1]
+	close(cctmp.con)
         options(warn=0)
         calBP <- seq(max(cctmp),min(cctmp),-1)
 	rownames(res) <- match(res[,1],calBP)
@@ -467,7 +478,12 @@ as.CalDates <- function(x){
 }
 
 
+#' @export
 
+length.CalDates <- function(x,...)
+{
+ return(nrow(x$metadata))
+}
 
 hpdi <- function(x, credMass=0.95){
 
@@ -589,3 +605,62 @@ medCal <- function(x)
 	}
 return(meddates)
 }
+
+#' @title Creates mixed terrestrial/marine calibration curves.
+#'
+#' @description Function for generating a vector median calibrated dates from a \code{CalDates} class object.
+#' 
+#' @param calCurve Name of the terrestrial curve, either 'intcal13' or 'shcal13'. Default is 'intcal13'.
+#' @param p Proportion of terrestrial contribution. Deafult is 1.
+#' @param resOffsets Offset value for the marine reservoir effect. Default is 0.
+#' @param resErrors Error of the marine reservoir effect offset. Default is 0.
+#' @return A three-column matrix containing calibrated year BP, uncalibrated age bp, and standard deviation. To be used as custom calibration curve for the \code{\link{calibrate}} function.
+#' @details The function is based on the \code{mix.calibrationcurves} function of the \code{clam} package. 
+#' @references 
+#' Blaauw, M. and Christen, J.A.. 2011. Flexible paleoclimate age-depth models using an autorgressive gamma process. \emph{Bayesian Analysis}, 6, 457-474.
+#' Blaaw, M. 2018. clam: Classical Age-Depth Modelling of Cores from Deposits. R package version 2.3.1. https://CRAN.R-project.org/packacge=clam
+#'
+#' @examples
+#' myCurve <- mixCurves('intcal13',p=0.7,resOffsets=300,resErrors=20)
+#' x <- calibrate(4000,30,calCurves=myCurve)
+#' @seealso \code{\link{calibrate}}
+#' @export
+
+
+mixCurves <- function(calCurve='intcal13',p=1,resOffsets=0,resErrors=0)
+{
+
+            terrestrialFile <- paste(system.file("extdata", package="rcarbon"), "/", calCurve,".14c", sep="")
+            marineFile <- paste(system.file("extdata", package="rcarbon"), "/","marine13.14c", sep="")
+            options(warn=-1)
+            terrestrial <- readLines(terrestrialFile, encoding="UTF-8")
+            marine<- readLines(marineFile, encoding="UTF-8")
+
+            terrestrial <- terrestrial[!grepl("[#]",terrestrial)]
+            marine <- marine[!grepl("[#]",marine)]
+            terrestrial.con <- textConnection(terrestrial) 
+	    marine.con <- textConnection(marine)
+	    terrestrial <- as.matrix(read.csv(terrestrial.con, header=FALSE, stringsAsFactors=FALSE))[,1:3]
+	    marine <- as.matrix(read.csv(marine.con, header=FALSE, stringsAsFactors=FALSE))[,1:3]
+	    close(terrestrial.con)
+	    close(marine.con)
+            options(warn=0)
+            colnames(marine) <- c("CALBP","C14BP","Error")
+            colnames(terrestrial) <- c("CALBP","C14BP","Error")
+
+ 	    marine.mu <- approx(marine[, 1], marine[, 2], terrestrial[, 1], rule = 2)$y + resOffsets
+	    marine.error <- approx(marine[, 1], marine[, 3], terrestrial[, 1], rule = 2)$y
+ 	    marine.error <- sqrt(marine.error^2 + resErrors^2)
+ 	    mu <- p * terrestrial[, 2] + (1 - p) * marine.mu
+ 	    error <- p * terrestrial[, 3] + (1 - p) * marine.error
+	    res = cbind(terrestrial[,1],mu,error)
+	    colnames(res) = c("CALBP","C14BP","Error")
+
+	    return(res)
+
+}
+
+
+
+
+

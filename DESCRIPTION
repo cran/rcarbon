@@ -1,6 +1,6 @@
 Package: rcarbon
 Title: Calibration and Analysis of Radiocarbon Dates
-Version: 1.1.3
+Version: 1.2.0
 Authors@R: c(person("Andrew","Bevan", role=c("aut"),email="andrew.bevan@gmail.com"),
 	     person("Enrico","Crema", role=c("aut","cre"),email="enrico.crema@gmail.com"),
 	     person("Fabio","Silva", role=c("ctb"),email="fabio.silva@ucl.ac.uk"))
@@ -13,12 +13,12 @@ License: GPL (>= 2)
 Encoding: UTF-8
 LazyData: true
 VignetteBuilder: knitr
-RoxygenNote: 6.0.1
+RoxygenNote: 6.1.0
 NeedsCompilation: no
-Packaged: 2018-06-26 18:37:19 UTC; enryu
+Packaged: 2018-10-01 07:53:14 UTC; enryu
 Author: Andrew Bevan [aut],
   Enrico Crema [aut, cre],
   Fabio Silva [ctb]
 Maintainer: Enrico Crema <enrico.crema@gmail.com>
 Repository: CRAN
-Date/Publication: 2018-06-26 20:51:07 UTC
+Date/Publication: 2018-10-01 09:30:04 UTC
