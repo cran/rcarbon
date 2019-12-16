@@ -4,10 +4,12 @@
 \alias{summary.SpdModelTest}
 \title{Summarise a \code{SpdModelTest} class object}
 \usage{
-\method{summary}{SpdModelTest}(object, ...)
+\method{summary}{SpdModelTest}(object, type = "spd", ...)
 }
 \arguments{
 \item{object}{A \code{SpdModelTest} class object produced using the \code{link{modelTest}} function.}
+
+\item{type}{Specifies whether the summary should be based on SPD ('spd') or associated rates of change ('roc'). Default is 'spd'.}
 
 \item{...}{Ignored}
 }
@@ -15,7 +17,7 @@
 \code{summary} method for class "\code{SpdModelTest}"
 }
 \details{
-The summary function returns metadata (number of radiocarbon dates, bins, and simulations), the p-value of the global signficance test, and the chronological interval of local positive and negative deviations from the simulation envelope.
+The summary function returns metadata (number of radiocarbon dates, bins, and simulations), the p-value of the global significance test, and the chronological interval of local positive and negative deviations from the simulation envelope.
 }
 \seealso{
 \code{\link{modelTest}}.

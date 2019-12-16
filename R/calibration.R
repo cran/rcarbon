@@ -1,8 +1,8 @@
 #' @title Calibrate radiocarbon dates
 #'
-#' @description Function for calibrating one or more radiocarbon dates.
+#' @description Function for calibrating radiocarbon dates or uncalibrated SPDs.
 #'
-#' @param x A vector of uncalibrated radiocarbon ages .
+#' @param x A vector of uncalibrated radiocarbon ages or a UncalGrid class object.
 #' @param errors A vector of standard deviations corresponding to each estimated radiocarbon age.
 #' @param ids An optional vector of IDs for each date.
 #' @param dateDetails An optional vector of details for each date which will be returned in the output metadata. 
@@ -11,13 +11,14 @@
 #' @param resErrors A vector of offset value errors for any marine reservoir effect (default is no offset).
 #' @param timeRange Earliest and latest data to calibrate for, in calendar years. Posterior probabilities beyond this range will be excluded (the default is sensible in most cases).
 #' @param normalised A logical variable indicating whether the calibration should be normalised or not. Default is TRUE.
+#' @param F14C A logical variable indicating whether calibration should be carried out in F14C space or not. Default is FALSE.
 #' @param eps Cut-off value for density calculation. Default is 1e-5.
 #' @param calMatrix a logical variable indicating whether the age grid should be limited to probabilities higher than \code{eps}
 #' @param ncores Number of cores/workers used for parallel execution. Default is 1 (>1 requires doParallel package).
 #' @param verbose A logical variable indicating whether extra information on progress should be reported. Default is TRUE.
 #' @param ... ignored
 #'
-#' @details This function computes one or more calibrated radiocarbon ages using the method described in Bronk Ramsey 2008 (albeit not in F14C space, see also  Parnell 2017). It is possible to specify different calibration curves or reservoir offsets individually for each date, and control whether the resulting calibrated distribution is normalised to 1 under-the-curve or not. Calculations can also be executed in parallel to reduce computing time. The function was modified from the \code{BchronCalibrate} function in the \code{Bchron} package developed by A.Parnell (see references below).
+#' @details This function computes one or more calibrated radiocarbon ages using the method described in Bronk Ramsey 2008 (see also  Parnell 2017). It is possible to specify different calibration curves or reservoir offsets individually for each date, and control whether the resulting calibrated distribution is normalised to 1 under-the-curve or not. Calculations can also be executed in parallel to reduce computing time. The function was modified from the \code{BchronCalibrate} function in the \code{Bchron} package developed by A.Parnell (see references below).
 #'
 #' @return An object of class CalDates with the following elements:
 #' \itemize{
@@ -49,8 +50,7 @@ calibrate <- function (x, ...) {
 
 #' @rdname calibrate
 #' @export
-
-calibrate.default <- function(x, errors, ids=NA, dateDetails=NA, calCurves='intcal13', resOffsets=0 , resErrors=0, timeRange=c(50000,0), normalised=TRUE, calMatrix=FALSE, eps=1e-5, ncores=1, verbose=TRUE, ...){
+calibrate.default <- function(x, errors, ids=NA, dateDetails=NA, calCurves='intcal13', resOffsets=0 , resErrors=0, timeRange=c(50000,0), normalised=TRUE, F14C=FALSE, calMatrix=FALSE, eps=1e-5, ncores=1, verbose=TRUE, ...){
 
     if (ncores>1&!requireNamespace("doParallel", quietly=TRUE)){	
 	warning("the doParallel package is required for multi-core processing; ncores has been set to 1")
@@ -67,8 +67,18 @@ calibrate.default <- function(x, errors, ids=NA, dateDetails=NA, calCurves='intc
     if (any(is.na(x))|any(is.na(errors))){
         stop("Ages or errors contain NAs")
     }
+    if (is.null(calCurves)|anyNA(calCurves)){
+	stop("calCurves is NULL or contain NAs")
+    }
+
+  
+    if (F14C==TRUE&normalised==FALSE)
+    {
+      normalised=TRUE
+      warning("normalised cannot be FALSE when F14C is set to TRUE, calibrating with normalised=TRUE")
+    }
     # calCurve checks and set-up
-    if (class(calCurves) %in% c("matrix","data.frame")){
+    if (any(class(calCurves) %in% c("matrix","data.frame"))){
         cctmp <- as.matrix(calCurves)
         if (ncol(cctmp)!=3 | !all(sapply(cctmp,is.numeric))){
             stop("The custom calibration curve must have just three numeric columns.")
@@ -137,10 +147,27 @@ calibrate.default <- function(x, errors, ids=NA, dateDetails=NA, calCurves='intc
             calBP <- seq(max(calcurve),min(calcurve),-1)
             age <- x[b] - resOffsets[b]
             error <- errors[b] + resErrors[b]
+            if (F14C==FALSE)
+            {  
             mu <- approx(calcurve[,1], calcurve[,2], xout=calBP)$y
             tau <- error^2 + approx(calcurve[,1], calcurve[,3], xout=calBP)$y^2
             dens <- dnorm(age, mean=mu, sd=sqrt(tau))
-            dens[dens < eps] <- 0	
+            dens[dens < eps] <- 0
+            }
+            if (F14C==TRUE)
+            {
+              F14 <- exp(calcurve[,2]/-8033) 
+              F14Error <-  F14*calcurve[,3]/8033 
+              calf14 <- approx(calcurve[,1], F14, xout=calBP)$y 
+              calf14error <-  approx(calcurve[,1], F14Error, xout=calBP)$y 
+              f14age <- exp(age/-8033) 
+              f14err <- f14age*error/8033 
+              p1 <- (f14age - calf14)^2 
+              p2 <- 2 * (f14err^2 + calf14error^2) 
+              p3 <- sqrt(f14err^2 + calf14error^2) 
+              dens <- exp(-p1/p2)/p3 
+              dens[dens < eps] <- 0	
+            }
             if (normalised){
                 dens <- dens/sum(dens)
                 dens[dens < eps] <- 0
@@ -148,6 +175,10 @@ calibrate.default <- function(x, errors, ids=NA, dateDetails=NA, calCurves='intc
             }
             res <- data.frame(calBP=calBP,PrDens=dens)
             res <- res[which(calBP<=timeRange[1]&calBP>=timeRange[2]),]
+	    if (anyNA(res$PrDens))
+	    {
+		    stop("One or more dates are outside the calibration range")
+	    }
             res <- res[res$PrDens > 0,]
             class(res) <- append(class(res),"calGrid")
             return(res)
@@ -167,10 +198,27 @@ calibrate.default <- function(x, errors, ids=NA, dateDetails=NA, calCurves='intc
             calBP <- seq(max(calcurve),min(calcurve),-1)
             age <- x[b] - resOffsets[b]
             error <- errors[b] + resErrors[b]
+            if (F14C==FALSE)
+            {
             mu <- approx(calcurve[,1], calcurve[,2], xout=calBP)$y
             tau <- error^2 + approx(calcurve[,1], calcurve[,3], xout=calBP)$y^2
             dens <- dnorm(age, mean=mu, sd=sqrt(tau))
             dens[dens < eps] <- 0
+            }
+            if (F14C==TRUE)
+            {
+              F14 <- exp(calcurve[,2]/-8033) 
+              F14Error <-  F14*calcurve[,3]/8033 
+              calf14 <- approx(calcurve[,1], F14, xout=calBP)$y 
+              calf14error <-  approx(calcurve[,1], F14Error, xout=calBP)$y 
+              f14age <- exp(age/-8033)
+              f14err <- f14age*error/8033 
+              p1 <- (f14age - calf14)^2 
+              p2 <- 2 * (f14err^2 + calf14error^2) 
+              p3 <- sqrt(f14err^2 + calf14error^2) 
+              dens <- exp(-p1/p2)/p3 
+              dens[dens < eps] <- 0	
+            }
             if (normalised){
                 dens <- dens/sum(dens)
                 dens[dens < eps] <- 0
@@ -178,6 +226,10 @@ calibrate.default <- function(x, errors, ids=NA, dateDetails=NA, calCurves='intc
             }
             res <- data.frame(calBP=calBP,PrDens=dens)
             res <- res[which(calBP<=timeRange[1]&calBP>=timeRange[2]),]
+	    if (anyNA(res$PrDens))
+	    {
+		    stop("One or more dates are outside the calibration range")
+	    }
             if (calMatrix){ calmat[,b] <- res$PrDens }
             res <- res[res$PrDens > 0,]
             class(res) <- append(class(res),"calGrid")
@@ -186,7 +238,7 @@ calibrate.default <- function(x, errors, ids=NA, dateDetails=NA, calCurves='intc
     }
     ## clean-up and results
     if (length(x)>1 & verbose){ close(pb) }
-    df <- data.frame(DateID=ids, CRA=x, Error=errors, Details=dateDetails, CalCurve=calCurves,ResOffsets=resOffsets, ResErrors=resErrors, StartBP=timeRange[1], EndBP=timeRange[2], Normalised=normalised, CalEPS=eps, stringsAsFactors=FALSE)
+    df <- data.frame(DateID=ids, CRA=x, Error=errors, Details=dateDetails, CalCurve=calCurves,ResOffsets=resOffsets, ResErrors=resErrors, StartBP=timeRange[1], EndBP=timeRange[2], Normalised=normalised, F14C=F14C, CalEPS=eps, stringsAsFactors=FALSE)
     reslist[["metadata"]] <- df
     if (calMatrix){
         reslist[["grids"]] <- NA
@@ -200,9 +252,17 @@ calibrate.default <- function(x, errors, ids=NA, dateDetails=NA, calCurves='intc
     return(reslist)
 }
 
-#' @export
 
-calibrate.UncalGrid <- function(x, errors=0, calCurves='intcal13', timeRange=c(50000,0), compact=TRUE, eps=1e-5, type="fast", datenormalised=FALSE, spdnormalised=FALSE, verbose=TRUE, ...){
+#' @title Calibrate a UncalGrid class object
+#'
+#' @description Function for calibrating a SPD generated by summing uncalibrated dates.
+#'
+#' @param type Currently, two options are available. With "fast", a look-up is conducted for each calendar year that picks up the amplitude of the nearest CRA age. With "full", each CRA is calibrated individually and then summed (much slower).
+#' @param datenormalised Controls for calibrated dates with probability mass outside the timerange of analysis. If set to TRUE the total probability mass within the time-span of analysis is normalised to sum to unity. Should be set to FALSE when the parameter \code{normalised} in \code{\link{calibrate}} is set to FALSE. Default is FALSE. 
+#' @param spdnormalised A logical variable indicating whether the total probability mass of the SPD is normalised to sum to unity. 
+#' @rdname calibrate
+#' @export
+calibrate.UncalGrid <- function(x, errors=0, calCurves='intcal13', timeRange=c(50000,0), eps=1e-5, type="fast", datenormalised=FALSE, spdnormalised=FALSE, verbose=TRUE,...){
 
     if (length(errors)==1){
         errors <- rep(errors,length(x$CRA))
@@ -214,7 +274,7 @@ calibrate.UncalGrid <- function(x, errors=0, calCurves='intcal13', timeRange=c(5
         } else {
             colnames(calcurve) <- c("CALBP","C14BP","Error")
         }
-    } else if (class(calCurves)=="character"){
+    } else if (any(class(calCurves)=="character")){
         calCurveFile <- paste(system.file("extdata", package="rcarbon"), "/", calCurves,".14c", sep="")
         options(warn=-1)
         calcurve <- readLines(calCurveFile, encoding="UTF-8")
@@ -228,11 +288,11 @@ calibrate.UncalGrid <- function(x, errors=0, calCurves='intcal13', timeRange=c(5
         stop("calCurves must be a character vector specifying a known curve or a custom three-column matrix/data.frame (see ?calibrate.default).")
     }
     if (type=="full"){
-        caleach <- calibrate(x=x$CRA, errors=errors, method="standard", normalised=datenormalised, compact=FALSE,...)
-        tmp <- lapply(caleach$grids,`[`,2)
-        tmp <- lapply(1:length(tmp),FUN=function(i) tmp[[i]]*x$PrDens[i])
-        tmp <- do.call("cbind",tmp)
-        res <- data.frame(calBP=caleach$grids[[1]]$calBP, PrDens=apply(tmp,1,sum))
+        caleach <- calibrate(x=x$CRA, errors=errors, normalised=datenormalised, calMatrix=TRUE, ...)
+        for (d in 1:ncol(caleach$calmatrix)){
+            caleach$calmatrix[,d] <- caleach$calmatrix[,d] *  x$PrDens[d]
+        }
+        res <- data.frame(calBP=50000:0, PrDens=rowSums(caleach$calmatrix))
     } else if (type=="fast"){
         if (datenormalised){
             warning('Cannot normalise dates using fast method, so leaving unnormalised.')
@@ -254,17 +314,19 @@ calibrate.UncalGrid <- function(x, errors=0, calCurves='intcal13', timeRange=c(5
     } else {
         res[res$PrDens < eps,"PrDens"] <- 0
     }
-    if (compact){ res <- res[res$PrDens > 0,] }
+    res <- res[res$PrDens > 0,]
     class(res) <- c("CalGrid", class(res))   
     if (verbose){ print("Done.") }
     return(res)
 }
 
+
+
 #' @title Uncalibrate (back-calibrate) a calibrated radiocarbon date (or summed probability distribution).
 #'
 #' @description Function for uncalibrating one or more radiocarbon dates.
 #'
-#' @param x Either a vector of uncalibrated radiocarbon ages or an object of class CalGrid.
+#' @param x Either a vector of calibrated radiocarbon ages or an object of class CalGrid.
 #' @param CRAerrors A vector of standard deviations corresponding to each estimated radiocarbon age (ignored if x is a CalGrid object).
 #' @param roundyear An optional vector of IDs for each date (ignored if x is a CalGrid object).
 #' @param  calCurves A string naming a calibration curve already provided with the rcarbon package (currently 'intcal13','intcal13nhpine16','shcal13',"shcal13shkauri16', and 'marine13' are possible) or a custom curve provided as matrix/data.frame in three columns ("CALBP","C14BP","Error"). The default is the 'intcal13' curve and only one curve can currently be specified for all dates. 
@@ -298,7 +360,7 @@ uncalibrate.default <- function(x, CRAerrors=0, roundyear=TRUE, calCurves='intca
     
     if (length(CRAerrors)==1){ CRAerrors <- rep(CRAerrors,length(x)) } 
     ## calCurve checks and set-up
-    if (class(calCurves) %in% c("matrix","data.frame")){
+    if (any(class(calCurves) %in% c("matrix","data.frame","array"))){
         calcurve <- as.matrix(calCurves)
         if (ncol(calcurve)!=3 | !all(sapply(calcurve,is.numeric))){
             stop("The custom calibration curve must have just three numeric columns.")
@@ -340,7 +402,7 @@ uncalibrate.CalGrid <- function(x, calCurves='intcal13', eps=1e-5, compact=TRUE,
     if (verbose){ print("Uncalibrating...") }
     names(x) <- c("calBP","PrDens")
     ## calCurve checks and set-up
-    if (class(calCurves) %in% c("matrix","data.frame")){
+    if (any(class(calCurves) %in% c("matrix","data.frame","array"))){
         calcurve <- as.matrix(calCurves)
         if (ncol(calcurve)!=3 | !all(sapply(calcurve,is.numeric))){
             stop("The custom calibration curve must have just three numeric columns.")
@@ -365,26 +427,21 @@ uncalibrate.CalGrid <- function(x, calCurves='intcal13', eps=1e-5, compact=TRUE,
     }
     mycras <- uncalibrate(x$calBP,calCurves=calCurves)
     res <- data.frame(CRA=max(calcurve[,2]):min(calcurve[,2]), PrDens=0)
-    tmp <- vector(mode="list",length=nrow(mycras))
-    basetmp <- vector(mode="list",length=nrow(mycras))
-    if (length(tmp)>1 & verbose){
-        flush.console()
-        pb <- txtProgressBar(min=1, max=length(tmp), style=3)
-    }
-    for (a in 1:length(tmp)){
-        basetmp[[a]] <- dnorm(res$CRA, mean=mycras$ccCRA[a], sd=mycras$ccError[a])
-        tmp[[a]] <- basetmp[[a]] * x$PrDens[a]
-        if (verbose){ setTxtProgressBar(pb, a) }
-    }
-    if (verbose){ close(pb) }
-    unscGauss <- do.call("cbind",tmp)
-    res$Raw <- rowSums(unscGauss)
-    res$Raw[res$Raw < eps] <- 0
-    base <- do.call("cbind",basetmp)
-    res$Base <- rowSums(base)
+    
+    h = x$PrDens/sum(x$PrDens)
+    mu = mycras$ccCRA
+    s = mycras$ccError
+    k = res$CRA
+
+    res$Raw=unlist(sapply(k,function(x,mu,s,h){return(sum(dnorm(x,mu,s)*h))},h=h,mu=mu,s=s))
+    res$Base=unlist(sapply(k,function(x,mu,s){return(sum(dnorm(x,mu,s)))},mu=mu,s=s))
+
+    res$Raw=res$Raw/sum(res$Raw)
+	
     res$Raw[res$Raw < eps] <- 0
     res$PrDens[res$Base>0] <- res$Raw[res$Base>0] / res$Base[res$Base>0]
     if (compact){ res <- res[res$PrDens > 0,] }
+    res$PrDens=res$PrDens/sum(res$PrDens)
     class(res) <- c("UncalGrid", class(res)) 
     if (verbose){ print("Done.") }
     return(res)
@@ -415,45 +472,130 @@ as.CalGrid <- function(x) {
     return(df)
 }
 
-as.CalDates <- function(x){
-    cl <- class(x)
-    if (cl!="BchronCalibratedDates"){
-	    stop("x must be of class BchronCalibratedDates")
+#' @title Convert data to class UncalGrid. 
+#'
+#' @description Tries to coerce any two-column matrix or data.frame to a uncalibrated probability distribution (an object of class "UncalGrid") for use by the rcarbon package. 
+#' 
+#' @param x A two-column \code{matrix} or \code{data.frame} class object.
+#'
+#' @return A CalGrid class object of probabilities or summed probabilities per CRA.
+#' @examples
+#' df <- data.frame(CRA=5000:2000,PrDens=runif(length(5000:2000)))
+#' mycalgrid <- as.UncalGrid(df)
+#' @export
+ 
+as.UncalGrid <- function(x) {
+    df <- as.data.frame(x)
+    if (ncol(x) == 2){
+        names(df) <- c("CRA", "PrDens")
+    } else {
+        stop("Input must be 2 columns.")
     }
-    methods <- "Bchron"
-    reslist <- vector(mode="list", length=2)
-    sublist <- vector(mode="list", length=length(x))
-    ids <- as.character(1:length(x))
-    names(sublist) <- ids
-    names(reslist) <- c("metadata","grids")
-    ages <- unlist(lapply(x,function(x){return(x[[1]])}))
-    errors <-  unlist(lapply(x,function(x){return(x[[2]])}))
-    calCurves <- as.character(unlist(lapply(x,function(x){return(x[[3]])})))
-
-    for (i in 1:length(x))
-    {
-	tmp <- x[[i]]
-	res <- data.frame(calBP=rev(tmp$ageGrid),PrDens=rev(tmp$densities))
-        class(res) <- append(class(res),"calGrid")        
-	calCurveFile <- paste(system.file("extdata", package="rcarbon"), "/", calCurves[i],".14c", sep="")
-        options(warn=-1)
-        cctmp <- readLines(calCurveFile, encoding="UTF-8")
-        cctmp <- cctmp[!grepl("[#]",cctmp)]
-	cctmp.con <- textConnection(cctmp)
-        cctmp <- as.matrix(read.csv(cctmp.con, header=FALSE, stringsAsFactors=FALSE))[,1]
-	close(cctmp.con)
-        options(warn=0)
-        calBP <- seq(max(cctmp),min(cctmp),-1)
-	rownames(res) <- match(res[,1],calBP)
-	sublist[[ids[i]]] <- res
-    }	    
-	 
-    df <- data.frame(DateID=ids, CRA=ages, Error=errors, Details=NA, CalCurve=calCurves,ResOffsets=NA, ResErrors=NA, StartBP=NA, EndBP=NA, CalMethod="Bchron", Normalised=TRUE, CalEPS=NA, stringsAsFactors=FALSE)
-    reslist[["metadata"]] <- df
-    reslist[["grids"]] <- sublist
-    class(reslist) <- c("CalDates",class(reslist))
-    return(reslist)
+    class(df) <- c("UncalGrid", class(df)) 
+    return(df)
 }
+
+
+
+#' @title Convert to a CalDates object 
+#' @description Convert other calibrated date formats to an rcarbon CalDates object. 
+#' @param x One or more calibrated dated to convert (currently only BchronCalibratedDates and oxcAARCalibratedDatesList objects are supported)
+#' @return A CalDates object
+#' @examples
+#' \dontrun{ 
+#' library(Bchron)
+#' library(oxcAAR)
+#' quickSetupOxcal()
+#' dates <- data.frame(CRA=c(3200,2100,1900), Error=c(35,40,50))
+#' bcaldates <- BchronCalibrate(ages=dates$CRA, ageSds=dates$Error, 
+#' calCurves=rep("intcal13", nrow(dates)))
+#' rcaldates <- rcarbon::calibrate(dates$CRA, dates$Error, calCurves=rep("intcal13"))
+#' ocaldates <- oxcalCalibrate(c(3200,2100,1900),c(35,40,50),c("a","b","c"))
+#' ## Convert to rcarbon format
+#' caldates.b <- as.CalDates(bcaldates)
+#' caldates.o <- as.CalDates(ocaldates)
+#' ## Comparison plot
+#' plot(rcaldates$grids[[2]]$calBP,rcaldates$grids[[2]]$PrDens, 
+#' type="l", col="green", xlim=c(2300,1900))
+#' lines(caldates.b$grids[[2]]$calBP,caldates.b$grids[[2]]$PrDens, col="red")
+#' lines(caldates.o$grids[[2]]$calBP,caldates.o$grids[[2]]$PrDens, col="blue")
+#' legend("topright", legend=c("rcarbon","Bchron","OxCal"), col=c("green","red","blue"), lwd=2)
+#' }
+#' @export
+#' 
+as.CalDates <- function(x){
+    if (!any(class(x)%in%c("BchronCalibratedDates","oxcAARCalibratedDatesList"))){
+        stop("Currently, x must be of class BchronCalibratedDates or oxcAARCalibratedDatesList")
+    }
+    if (any(class(x)=="BchronCalibratedDates")){	    
+        methods <- "Bchron"
+        reslist <- vector(mode="list", length=2)
+        sublist <- vector(mode="list", length=length(x))
+        names(sublist) <- names(x)
+        names(reslist) <- c("metadata","grids")
+        ## metadata
+        df <- as.data.frame(matrix(ncol=11, nrow=length(x)), stringsAFactors=FALSE)
+        names(df) <- c("DateID","CRA","Error","Details","CalCurve","ResOffsets","ResErrors","StartBP","EndBP","Normalised","CalEPS")
+        df$DateID <- names(x)
+        df$CRA <- as.numeric(unlist(lapply(X=x, FUN=`[[`, "ages")))
+        df$Error <- as.numeric(unlist(lapply(X=x, FUN=`[[`, "ageSds")))
+        df$CalCurve <- as.character(unlist(lapply(X=x, FUN=`[[`, "calCurves")))
+        df$ResOffsets <- NA
+        df$ResErrors <- NA
+        df$StartBP <- NA
+        df$EndBP <- NA
+        df$Normalised <- TRUE
+        reslist[["metadata"]] <- df
+        ## grids
+        for (i in 1:length(x)){
+            tmp <- x[[i]]
+            res <- data.frame(calBP=rev(tmp$ageGrid),PrDens=rev(tmp$densities))
+            class(res) <- append(class(res),"calGrid")        
+            sublist[[i]] <- res
+        }
+        reslist[["grids"]] <- sublist
+        reslist[["calmatrix"]] <- NA
+        class(reslist) <- c("CalDates",class(reslist))
+        return(reslist)
+    }
+    if (any(class(x)=="oxcAARCalibratedDatesList")){
+        reslist <- vector(mode="list", length=2)
+        sublist <- vector(mode="list", length=length(x))
+        names(sublist) <- names(x)
+        names(reslist) <- c("metadata","grids")
+        ## metadata
+        df <- as.data.frame(matrix(ncol=11, nrow=length(x)), stringsAFactors=FALSE)
+        names(df) <- c("DateID","CRA","Error","Details","CalCurve","ResOffsets","ResErrors","StartBP","EndBP","Normalised","CalEPS")
+        df$DateID <- names(x)
+        df$CRA <- as.numeric(unlist(lapply(X=x, FUN=`[[`, "bp")))
+        df$Error <- as.numeric(unlist(lapply(X=x, FUN=`[[`, "std")))
+        df$CalCurve=lapply(lapply(lapply(lapply(lapply(x,FUN=`[[`,"cal_curve"),FUN=`[[`,"name"),strsplit," "),unlist),FUN=`[[`,2)
+        df$CalCurve=tolower(df$CalCurve)
+        df$ResOffsets <- NA
+        df$ResErrors <- NA
+        df$StartBP <- NA
+        df$EndBP <- NA
+        df$Normalised <- TRUE
+        df$CalEPS <- 0
+        reslist[["metadata"]] <- df
+        ## grids
+        for (i in 1:length(x)){
+            tmp <- x[[i]]$raw_probabilities  
+            rr <- range(tmp$dates)
+            res <- 	approx(x=tmp$dates,y=tmp$probabilities,xout=ceiling(rr[1]):floor(rr[2]))
+            res$x <- abs(res$x-1950)
+            res <- data.frame(calBP=res$x,PrDens=res$y)
+            res$PrDens <- res$PrDens/sum(res$PrDens)
+            class(res) <- append(class(res),"calGrid")        
+            sublist[[i]] <- res
+        }
+        reslist[["grids"]] <- sublist
+        reslist[["calmatrix"]] <- NA
+        class(reslist) <- c("CalDates",class(reslist))
+        return(reslist)
+    }       
+}
+
 
 #' @export
 
@@ -521,8 +663,9 @@ hpdi <- function(x, credMass=0.95){
 #' @param calendar Whether the summary statistics should be computed in cal BP (\code{"BP"}) or in BCAD (\code{"BCAD"}).
 #' @param ... further arguments passed to or from other methods.
 #' @return A \code{data.frame} class object containing the ID of each date, along with the median date and one and two sigma (or a user specified probability) higher posterior density ranges.
-#'
+#' @method summary CalDates
 #' @export 
+
 summary.CalDates<-function(object,prob=NA,calendar="BP",...) {
 	
 	foo = function(x,i){if(nrow(x)>=i){return(x[i,])}else{return(c(NA,NA))}}
@@ -606,59 +749,59 @@ medCal <- function(x)
 return(meddates)
 }
 
-#' @title Creates mixed terrestrial/marine calibration curves.
+#' @title Creates mixed calibration curves.
 #'
-#' @description Function for generating a vector median calibrated dates from a \code{CalDates} class object.
+#' @description Function for generating mixed calibration curves (e.g. intcal13/marine13, intcal13/shcal13)  with user-defined proportions.
 #' 
-#' @param calCurve Name of the terrestrial curve, either 'intcal13' or 'shcal13'. Default is 'intcal13'.
-#' @param p Proportion of terrestrial contribution. Deafult is 1.
-#' @param resOffsets Offset value for the marine reservoir effect. Default is 0.
-#' @param resErrors Error of the marine reservoir effect offset. Default is 0.
+#' @param calCurve1 Name of the first curve, chosen from 'intcal13','intcal13nhpine16','shcal13','shcal13shkauri16','marine13'. Default is 'intcal13'.
+#' @param calCurve2 Name of the second curve, from the same list. Default is 'marine13'.
+#' @param p The proportion of contribution of the first curve. Default is 1.
+#' @param resOffsets Offset value for the marine reservoir effect to be applied to calCurve2. Default is 0.
+#' @param resErrors Error of the marine reservoir effect offset to be applied to calCurve2. Default is 0.
 #' @return A three-column matrix containing calibrated year BP, uncalibrated age bp, and standard deviation. To be used as custom calibration curve for the \code{\link{calibrate}} function.
-#' @details The function is based on the \code{mix.calibrationcurves} function of the \code{clam} package. 
+#' @details The function is based on the \code{mix.calibrationcurves} function of the \code{clam} package.   
 #' @references 
-#' Blaauw, M. and Christen, J.A.. 2011. Flexible paleoclimate age-depth models using an autorgressive gamma process. \emph{Bayesian Analysis}, 6, 457-474.
-#' Blaaw, M. 2018. clam: Classical Age-Depth Modelling of Cores from Deposits. R package version 2.3.1. https://CRAN.R-project.org/packacge=clam
-#'
+#' Blaauw, M. and Christen, J.A.. 2011. Flexible paleoclimate age-depth models using an autoregressive gamma process. \emph{Bayesian Analysis}, 6, 457-474.
+#' Blaauw, M. 2018. clam: Classical Age-Depth Modelling of Cores from Deposits. R package version 2.3.1. https://CRAN.R-project.org/packacge=clam
+#' Marsh, E.J., Bruno, M.C., Fritz, S.C., Baker, P., Capriles, J.M. and Hastorf, C.A., 2018. IntCal, SHCal, or a Mixed Curve? Choosing a 14 C Calibration Curve for Archaeological and Paleoenvironmental Records from Tropical South America. Radiocarbon, 60(3), pp.925-940.
 #' @examples
-#' myCurve <- mixCurves('intcal13',p=0.7,resOffsets=300,resErrors=20)
+#' myCurve <- mixCurves('intcal13','marine13',p=0.7,resOffsets=300,resErrors=20)
 #' x <- calibrate(4000,30,calCurves=myCurve)
 #' @seealso \code{\link{calibrate}}
 #' @export
 
 
-mixCurves <- function(calCurve='intcal13',p=1,resOffsets=0,resErrors=0)
+
+mixCurves <- function (calCurve1 = "intcal13", calCurve2 = "intcal13", p = 0.5, resOffsets = 0, 
+                       resErrors = 0)
 {
-
-            terrestrialFile <- paste(system.file("extdata", package="rcarbon"), "/", calCurve,".14c", sep="")
-            marineFile <- paste(system.file("extdata", package="rcarbon"), "/","marine13.14c", sep="")
-            options(warn=-1)
-            terrestrial <- readLines(terrestrialFile, encoding="UTF-8")
-            marine<- readLines(marineFile, encoding="UTF-8")
-
-            terrestrial <- terrestrial[!grepl("[#]",terrestrial)]
-            marine <- marine[!grepl("[#]",marine)]
-            terrestrial.con <- textConnection(terrestrial) 
-	    marine.con <- textConnection(marine)
-	    terrestrial <- as.matrix(read.csv(terrestrial.con, header=FALSE, stringsAsFactors=FALSE))[,1:3]
-	    marine <- as.matrix(read.csv(marine.con, header=FALSE, stringsAsFactors=FALSE))[,1:3]
-	    close(terrestrial.con)
-	    close(marine.con)
-            options(warn=0)
-            colnames(marine) <- c("CALBP","C14BP","Error")
-            colnames(terrestrial) <- c("CALBP","C14BP","Error")
-
- 	    marine.mu <- approx(marine[, 1], marine[, 2], terrestrial[, 1], rule = 2)$y + resOffsets
-	    marine.error <- approx(marine[, 1], marine[, 3], terrestrial[, 1], rule = 2)$y
- 	    marine.error <- sqrt(marine.error^2 + resErrors^2)
- 	    mu <- p * terrestrial[, 2] + (1 - p) * marine.mu
- 	    error <- p * terrestrial[, 3] + (1 - p) * marine.error
-	    res = cbind(terrestrial[,1],mu,error)
-	    colnames(res) = c("CALBP","C14BP","Error")
-
-	    return(res)
-
+  File1 <- paste(system.file("extdata", package = "rcarbon"),"/", calCurve1, ".14c", sep = "")
+  File2 <- paste(system.file("extdata", package = "rcarbon"),"/", calCurve2, ".14c", sep = "")
+  options(warn = -1)
+  c1 <- readLines(File1, encoding = "UTF-8")
+  c2 <- readLines(File2, encoding = "UTF-8")
+  c1 <- c1[!grepl("[#]", c1)]
+  c2 <- c2[!grepl("[#]", c2)]
+  c1.con <- textConnection(c1)
+  c2.con <- textConnection(c2)
+  c1 <- as.matrix(read.csv(c1.con, header = FALSE,stringsAsFactors = FALSE))[, 1:3]
+  c2 <- as.matrix(read.csv(c2.con, header = FALSE,stringsAsFactors = FALSE))[, 1:3]
+  close(c1.con)
+  close(c2.con)
+  options(warn = 0)
+  colnames(c2) <- c("CALBP", "C14BP", "Error")
+  colnames(c1) <- c("CALBP", "C14BP","Error")
+  c2.mu <- approx(c2[, 1], c2[, 2], c1[,1], rule = 2)$y + resOffsets
+  c2.error <- approx(c2[, 1], c2[, 3], c1[,1], rule = 2)$y
+  c2.error <- sqrt(c2.error^2 + resErrors^2)
+  mu <- p * c1[, 2] + (1 - p) * c2.mu
+  error <- sqrt(p * c1[, 3]^2 + (1 - p) * c2.error^2)
+  res = cbind(c1[, 1], mu, error)
+  colnames(res) = c("CALBP", "C14BP", "Error")
+  return(res)
 }
+
+
 
 
 

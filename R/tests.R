@@ -1,4 +1,4 @@
- if(getRversion() >= "2.15.1")  utils::globalVariables(c("s"))
+ if(getRversion() >= "2.15.1")  utils::globalVariables(c("s","calBP"))
 
 
 
@@ -11,28 +11,46 @@
 #' @param nsim Number of simulations
 #' @param bins A vector indicating which bin each radiocarbon date is assigned to.
 #' @param runm A number indicating the window size of the moving average to smooth both observed and simulated SPDs. If set to \code{NA} no moving average is applied.Default is \code{NA}. 
-#' @param timeRange  A vector of length 2 indicating the start and end date of the analysis in cal BP.
+#' @param timeRange  A vector of length 2 indicating the start and end date of the analysis in cal BP. The fitting process is applied considering the SPD within the interval defined by this parameter. If no values are supplied the earliest and latest median calibrated dates of the observed data will be used.
+#' @param backsight A single numeric value defining the distance in time between the focal year and the backsight year for computing the rate of change. Default is 10.
+#' @param changexpr An expression for calculating the rate of change in SPD between the focal year and a backsight year. Available input options are t1 (the SPD for the focal year), t0 (the SPD for the backsight year), d (the distance between t0 and t1), and any other standard constants and mathematical operators. A sensible default is provided.
+#' @param gridclip Whether the sampling of random dates is constrained to the observed range (TRUE) or not (FALSE). Default is TRUE.
 #' @param raw A logical variable indicating whether all permuted SPDs should be returned or not. Default is FALSE.
 #' @param model A vector indicating the model to be fitted. Currently the acceptable options are \code{'uniform'}, \code{'linear'}, \code{'exponential'} and \code{'custom'}. Default is \code{'exponential'}. 
 #' @param method Method for the creation of random dates from the fitted model. Either \code{'uncalsample'} or \code{'calsample'}. Default is \code{'uncalsample'}. See below for details. 
 #' @param predgrid A data.frame containing calendar years (column \code{calBP}) and associated summed probabilities (column \code{PrDens}). Required when \code{model} is set to \code{'custom'}.
-#' @param datenormalised If set to TRUE the total probability mass of each calibrated date will be made to sum to unity (the default in most radiocarbon calibration software). This argument will only have an effect if the dates in \code{x} were calibrated without normalisation (via normalised=FALSE in the \code{\link{calibrate}} function), in which case setting \code{datenormalised=TRUE} here will rescale each dates probability mass to sum to unity before aggregating the dates, while setting \code{datenormalised=FALSE} will ensure unnormalised dates are used for both observed and simulated SPDs. Default is FALSE.
+#' @param normalised Whether the simulated dates should be normalised or not. Default based on whether x is normalised or not.  
+#' @param datenormalised Argument kept for backward compatibility with previous versions.
 #' @param spdnormalised A logical variable indicating whether the total probability mass of the SPD is normalised to sum to unity for both observed and simulated data. 
+#' @param edgeSize Controls edge effect by expanding the fitted model beyond the range defined by \code{timeRange}.
 #' @param ncores Number of cores used for for parallel execution. Default is 1.
 #' @param fitonly A logical variable. If set to TRUE, only the the model fitting is executed and returned. Default is FALSE.
 #' @param a Starter value for the exponential fit with the \code{\link{nls}} function using the formula \code{y ~ exp(a + b * x)} where \code{y} is the summed probability and \code{x} is the date. Default is 0.
 #' @param b Starter value for the exponential fit with the \code{\link{nls}} function using the formula \code{y ~ exp(a + b * x)} where \code{y} is the summed probability and \code{x} is the date. Default is 0. 
 #' @param verbose A logical variable indicating whether extra information on progress should be reported. Default is TRUE.
 #'
-#' @details The function implements a Monte-Carlo test for comparing a theoretical or fitted statistical model to an observed summed radiocarbon date distribution (aka SPD). A variety of theoretical expectations can be compared to the observed distribution by setting the \code{model} argument, for example to fit basic \code{'uniform'} (the mean of the SPD), \code{'linear'} (fitted using the \code{\link{lm}} function) or \code{model='exponential'} models (fitted using the \code{\link{nls}} function). Models are fitted to the period spanned by \code{timeRange} although \code{x} can contain dates outside this range to mitigate possible edge effects (see also \code{bracket}). Alternatively, it is possible for the user to provide a model of their own by setting \code{model='custom'} and then supplying a two-column data.frame to \code{predgrid}. The function generates \code{nsim} theoretical SPDs from the fitted model via Monte-Carlo simulation, this is then used to define a 95\% critical envelope for each calendar year. The observed SPD is then compared against the simulation envelope; local departures from the model are defined as instances where the observed SPD is outside such an envelope, while an estimate of the global significance of the observed SPD is also computed by comparing the total areas of observed and simulated SPDs that fall outside the simulation envelope. The theoretical SPDs can be generated using two different sampling approaches defined by the parameter \code{method}. If \code{method} is set to \code{'uncalsample'} each date is drawn after the fitted model is backcalibrated as a whole and adjusted for a baseline expectation; if it is set to  \code{'calsample'} samples are drawn from the fitted model in calendar year then individually back calibrated and recalibrated (the approach of Timpson et al. 2014). For each simulation, both approaches produces \eqn{n} samples, with \eqn{n} equal to the number of bins or number of dates (when bins are not defined). Differences between these two approaches are particularly evident at dates coincident with steeper portions of the calibration curve. If more than one type of calibration curve is associated with the observed dates, at each Monte-Carlo iteration, the function randomly assigns each bin to one of the calibration curves with probability based on the proportion of dates within the bin associated to the specific curves. For example, if a bin is composed of four dates and three are calibrated with 'intcal13' the probability of that particular bin being assigned to 'intcal13' is 0.75.  
-#' @note Windows users might receive a memory allocation error with larger time span of analysis (defined by the parameter \code{timeRange}). This can be avoided by increasing the memory limit with the \code{\link{memory.limit}} function.
+#' @details The function implements a Monte-Carlo test for comparing a theoretical or fitted statistical model to an observed summed radiocarbon date distribution (aka SPD) and associated rates of changes. A variety of theoretical expectations can be compared to the observed distribution by setting the \code{model} argument, for example to fit basic \code{'uniform'} (the mean of the SPD), \code{'linear'} (fitted using the \code{\link{lm}} function) or \code{model='exponential'} models (fitted using the \code{\link{nls}} function). Models are fitted to the period spanned by \code{timeRange} although \code{x} can contain dates outside this range to mitigate possible edge effects (see also \code{bracket}). Alternatively, it is possible for the user to provide a model of their own by setting \code{model='custom'} and then supplying a two-column data.frame to \code{predgrid}. The function generates \code{nsim} theoretical SPDs from the fitted model via Monte-Carlo simulation, this is then used to define a 95\% critical envelope for each calendar year. The observed SPD is then compared against the simulation envelope; local departures from the model are defined as instances where the observed SPD is outside such an envelope, while an estimate of the global significance of the observed SPD is also computed by comparing the total areas of observed and simulated SPDs that fall outside the simulation envelope. The theoretical SPDs can be generated using two different sampling approaches defined by the parameter \code{method}. If \code{method} is set to \code{'uncalsample'} each date is drawn after the fitted model is backcalibrated as a whole and adjusted for a baseline expectation; if it is set to  \code{'calsample'} samples are drawn from the fitted model in calendar year then individually back calibrated and recalibrated (the approach of Timpson et al. 2014). For each simulation, both approaches produces \eqn{n} samples, with \eqn{n} equal to the number of bins or number of dates (when bins are not defined). Differences between these two approaches are particularly evident at dates coincident with steeper portions of the calibration curve. If more than one type of calibration curve is associated with the observed dates, at each Monte-Carlo iteration, the function randomly assigns each bin to one of the calibration curves with probability based on the proportion of dates within the bin associated to the specific curves. For example, if a bin is composed of four dates and three are calibrated with 'intcal13' the probability of that particular bin being assigned to 'intcal13' is 0.75.  
+#' @note
+#'\itemize{
+#'\item {Windows users might receive a memory allocation error with larger time span of analysis (defined by the parameter \code{timeRange}). This can be avoided by increasing the memory limit with the \code{\link{memory.limit}} function.}
+#'\item {Users experiencing a \code{Error: cannot allocate vector of size ...} error message can increase the memory size using the \code{Sys.setenv()}, for example: \code{Sys.setenv("R_MAX_VSIZE" = 16e9)}.} 
+#'\item {The function currently supports only dates calibrated with 'intcal13','intcal13nhpine16','shcal13','shcal13shkauri16', and 'marine13'.}
+#'}
+#' 
 #' @return An object of class \code{SpdModelTest} with the following elements
 #' \itemize{
 #' \item{\code{result}} {A four column data.frame containing the observed probability density (column \emph{PrDens}) and the lower and the upper values of the simulation envelope (columns \emph{lo} and \emph{hi}) for each calendar year column \emph{calBP}}
-#' \item{\code{sim}} {A matrix containing the simulation results. Available only when \code{raw} is set to TRUE} 
-#' \item{\code{pval}} {A numeric vector containing the p-value of the global significance test.}  
+#' \item{\code{result.roc}} {A four column data.frame containing the observed rates of change (column \emph{roc}) and the lower and the upper values of the simulation envelope (columns \emph{lo.roc} and \emph{hi.roc}) for the mid point between two chronological blocks \emph{calBP}}
+#' \item{\code{sim}} {A matrix containing the simulation results of the summed probabilities. Available only when \code{raw} is set to TRUE} 
+#' \item{\code{sim.roc}} {A matrix containing the simulation results of the rate of change of summed probabilities. Available only when \code{raw} is set to TRUE} 
+#' \item{\code{pval}} {A numeric vector containing the p-value of the global significance test for the summed probabilities}  
+#' \item{\code{pval.roc}} {A numeric vector containing the p-value of the global significance test for the rates of change}  
 #' \item{\code{fit}} {A data.frame containing the probability densities of the fitted model for each calendar year within the time range of analysis}  
 #' \item{\code{fitobject}} {Fitted model. Not available when \code{model} is \code{'custom'}}  
+#' \item{\code{n}} {Number of radiocarbon dates.}
+#' \item{\code{nbins}}{Number of bins.}
+#' \item{\code{nsim}}{Number of Monte-Carlo simulations.}
+#' \item{\code{backsight}}{Backsight size.} 
 #' }
 #'
 #' @references 
@@ -44,7 +62,7 @@
 #' ## Example with Younger Dryas period Near East, including site bins
 #' \dontrun{
 #' data(emedyd)
-#' caldates <- calibrate(x=emedyd$CRA, errors=emedyd$Error, normalised=FALSE, calMatrix=TRUE)
+#' caldates <- calibrate(x=emedyd$CRA, errors=emedyd$Error, normalised=FALSE)
 #' bins <- binPrep(sites=emedyd$SiteName, ages=emedyd$CRA, h=50)
 #' nsim=5 #toy example
 #' expnull <- modelTest(caldates, errors=emedyd$Error, bins=bins, nsim=nsim, runm=50,
@@ -60,8 +78,10 @@
 #' @import doParallel
 #' @export
 
-modelTest <- function(x, errors, nsim, bins=NA, runm=NA, timeRange=NA, raw=FALSE, model=c("exponential"),method=c("uncalsample"),predgrid=NA, datenormalised=FALSE, spdnormalised=FALSE, ncores=1, fitonly=FALSE, a=0, b=0, verbose=TRUE){
-    
+modelTest <- function(x, errors, nsim, bins=NA, runm=NA, timeRange=NA,backsight=50,changexpr=expression((t1/t0)^(1/d)-1),gridclip=TRUE, raw=FALSE, model=c("exponential"),method=c("uncalsample"),predgrid=NA, normalised=NA,datenormalised=NA, spdnormalised=FALSE, ncores=1, fitonly=FALSE, a=0, b=0, edgeSize=500,verbose=TRUE){
+   
+
+    if (fitonly == TRUE) {nsim <- 1}
     if (ncores>1&!requireNamespace("doParallel", quietly=TRUE)){	
 	warning("the doParallel package is required for multi-core processing; ncores has been set to 1")
 	ncores=1
@@ -75,10 +95,62 @@ modelTest <- function(x, errors, nsim, bins=NA, runm=NA, timeRange=NA, raw=FALSE
 	stop("The 'method' argument must be either 'uncalsample' or 'calsample'")
     }
 
+    ccrange = c(max(medCal(x)),min(medCal(x)))
+
+    if (anyNA(timeRange))
+    {
+	    timeRange=ccrange
+    }
+
+    if (is.na(normalised))
+    {
+	    normalised=FALSE    
+	    if(x$metadata$Normalised[1]==TRUE)
+	    {
+		    normalised=TRUE
+	    }
+    }
+
+    if (normalised!=x$metadata$Normalised[1])
+    {
+	warning("The normalisation setting of x and normalised are different")
+    }
+
+    if (!is.na(datenormalised))
+    {
+	    if (datenormalised!=normalised)
+	    {
+		    warning("'datenormalised' is not equal to 'normalised'. The datenormalised setting will be used for the normalisation setting of the calibration of simulated dates")
+		    normalised=datenormalised
+	    }
+	    if (datenormalised!=x$metadata$Normalised[1])
+	    {
+		    if (x$metadata$Normalised[1])
+		    {
+			    warning("Input dates are normalised but datenormalised is set to FALSE. The datenormalised setting will be ignored")
+			    normalised=datenormalised
+		    }
+		    if (!x$metadata$Normalised[1])
+		    {
+
+			    warning("Input dates are not normalised but datenormalised is set to TRUE. The datenormalised setting will be ignored")
+			    normalised=datenormalised
+		    }
+	    }
+    }
+
+
 
     calCurves = x$metadata$CalCurve
+	if (!all(calCurves%in%c('intcal13','intcal13nhpine16','shcal13','shcal13shkauri16','marine13')))
+	{
+	stop("modelTest() currently accepts only dates calibrated with the following calibration curves: 'intcal13','intcal13nhpine16','shcal13','shcal13shkauri16', and 'marine13'") 
+	}
+
     unique.calCurves = as.character(sort(unique(calCurves)))
     ncc = length(unique.calCurves) #count number of unique calibration curves
+
+
 
     if (verbose){ print("Aggregating observed dates...") }
 
@@ -99,51 +171,86 @@ modelTest <- function(x, errors, nsim, bins=NA, runm=NA, timeRange=NA, raw=FALSE
     # Create artificial bins in case bins are not supplied 
     if (is.na(bins[1])){ bins <- as.character(1:nrow(x$metadata)) }
 
-    observed <- spd(x=x, bins=bins, timeRange=timeRange, datenormalised=datenormalised, runm=runm, spdnormalised=spdnormalised, verbose=FALSE)
+    observed <- spd(x=x, bins=bins, timeRange=timeRange, runm=runm, spdnormalised=spdnormalised, verbose=FALSE, edgeSize=edgeSize)
     finalSPD <- observed$grid$PrDens
-    if (fitonly == TRUE) {nsim <- 1}
     
     ## Simulation
     sim <- matrix(NA,nrow=length(finalSPD),ncol=nsim)
     if (verbose & !fitonly){
-        print("Monte-Carlo test...")
-    flush.console()
-        pb <- txtProgressBar(min=1, max=nsim, style=3)
+	    print("Monte-Carlo test...")
+	    flush.console()
+	    pb <- txtProgressBar(min=1, max=nsim, style=3)
     }
-    time <- seq(timeRange[1],timeRange[2],-1)
+    fit.time <- seq(timeRange[1],timeRange[2],-1)
+    pred.time <- fit.time
+    if (gridclip) 
+    {
+	    st = max(ccrange[1],timeRange[1])+edgeSize
+	    en = min(ccrange[2],timeRange[2])-edgeSize
+	    pred.time <- seq(st,en,-1)
+    }	
+
     fit <- NA
     if (model=="exponential"){
-        fit <- nls(y ~ exp(a + b * x), data=data.frame(x=time, y=finalSPD), start=list(a=a, b=b))
-        est <- predict(fit, list(x=time))
-        predgrid <- data.frame(calBP=time, PrDens=est)
+        fit <- nls(y ~ exp(a + b * x), data=data.frame(x=fit.time, y=finalSPD), start=list(a=a, b=b))
+        est <- predict(fit, list(x=pred.time))
+        predgrid <- data.frame(calBP=pred.time, PrDens=est)
     } else if (model=="uniform"){
-        predgrid <- data.frame(calBP=time, PrDens=mean(finalSPD))
+        predgrid <- data.frame(calBP=pred.time, PrDens=mean(finalSPD))
     } else if (model=="linear"){
-        fit <- lm(y ~ x, data=data.frame(x=time, y=finalSPD))
-        est <- predict(fit, list(x=time))
-        predgrid <- data.frame(calBP=time, PrDens=est)
+        fit <- lm(y ~ x, data=data.frame(x=fit.time, y=finalSPD))
+        est <- predict(fit, list(x=pred.time))
+        predgrid <- data.frame(calBP=pred.time, PrDens=est)
     } else if (model=="custom"){
-        if (length(predgrid)!=2){
-            stop("If you choose a custom model, you must provide a proper predgrid argument (two-column data.frame of calBP and predicted densities).")
-        }
+	    if (length(predgrid)!=2){
+		    stop("If you choose a custom model, you must provide a proper predgrid argument (two-column data.frame of calBP and predicted densities).")
+	    }
+	    if (!all(colnames(predgrid)%in%c("calBP","PrDens")))
+	    {
+		    stop("Column names in the predgrid argument should be 'calBP' and 'PrDens'")
+	    }
     } else {
         stop("Specified model not one of current choices.")
     }
     if (fitonly){
-        print("Done (SPD and fitted model only).")
-        res <- list(result=NA, sim=NA, pval=NA, osbSPD=observed, fit=predgrid, fitobject=fit)
-        return(res)
+	    print("Done (SPD and fitted model only).")
+	    predgrid <- subset(predgrid,calBP<=timeRange[1]&calBP>=timeRange[2])
+	    res <- list(result=NA, sim=NA, pval=NA, osbSPD=observed, fit=predgrid, fitobject=fit)
+	    return(res)
     }
-    
-    if (method=="uncalsample")
+
+
+ # Add Extra Edges with PrDens=0   
+    if (edgeSize>0)
     {
-	    cragrids = vector("list",length=ncc)
-	    for (i in 1:ncc)
-	    {		
-		    tmp.grid <- uncalibrate(as.CalGrid(predgrid), calCurves=unique.calCurves[i], compact=FALSE, verbose=FALSE)
+	predgrid = rbind.data.frame(data.frame(calBP=(max(predgrid$calBP)+edgeSize):c(predgrid$calBP[1]+1),PrDens=0),predgrid)
+    	predgrid = rbind.data.frame(predgrid,data.frame(calBP=min(predgrid$calBP):(min(predgrid$calBP)-edgeSize),PrDens=0))
+	if (any(predgrid$calBP<=0|predgrid$calBP>=50000))
+	    {
+		    warning("edgeSize reduced")
+		    predgrid = subset(predgrid, calBP<=50000&calBP>=0)
+	    }
+    }
+
+#  predgrid$PrDens = predgrid$PrDens/sum(predgrid$PrDens)
+
+# Prepare Sampling Grid(s)
+    cragrids = vector("list",length=ncc)
+    for (i in 1:ncc)
+    {		
+	    tmp.grid <- uncalibrate(as.CalGrid(predgrid), calCurves=unique.calCurves[i], compact=FALSE, verbose=FALSE)
+	    cragrids[[i]] <- tmp.grid
+
+	    # Cllipping the uncalibrated grid
+	    if (gridclip)
+	    {
 		    cragrids[[i]] <- tmp.grid[tmp.grid$CRA <= max(x$metadata$CRA) & tmp.grid$CRA >= min(x$metadata$CRA),]
 	    }
     }
+
+
+# Actual Method
+
 
     if (ncores==1)
     {
@@ -155,12 +262,12 @@ modelTest <- function(x, errors, nsim, bins=NA, runm=NA, timeRange=NA, raw=FALSE
 	    randomDates <- vector("list",length=ncc)
 	    ccurve.tmp <- numeric()
 	    for (i in 1:ncc)
-	    {
+	    {       
 		    randomDates[[i]] = sample(cragrids[[i]]$CRA,replace=TRUE,size=samplesize[s,i],prob=cragrids[[i]]$PrDens)
 		    ccurve.tmp = c(ccurve.tmp,rep(unique.calCurves[i],samplesize[s,i]))
 	    }
 
-        randomSDs <- sample(size=length(unlist(randomDates)), errors, replace=TRUE) 
+	    randomSDs <- sample(size=length(unlist(randomDates)), errors, replace=TRUE) 
     }
 
 
@@ -168,18 +275,17 @@ modelTest <- function(x, errors, nsim, bins=NA, runm=NA, timeRange=NA, raw=FALSE
     {
 	    randomDates <- vector("list",length=ncc)
 	    ccurve.tmp <- numeric()
-	    randomSDs <- numeric()	
 	    for (i in 1:ncc)
-	    {
-		    randomSDs.tmp=sample(size=samplesize[s,i],errors,replace=TRUE)
-		    randomDates[[i]] <- uncalibrate(sample(predgrid$calBP,replace=TRUE,size=samplesize[s,i],prob=predgrid$PrDens),randomSDs.tmp,calCurves=unique.calCurves[i])$rCRA   
+	    {       
+		    randomDates[[i]] = sample(cragrids[[i]]$CRA,replace=TRUE,size=samplesize[s,i],prob=cragrids[[i]]$Raw)
 		    ccurve.tmp = c(ccurve.tmp,rep(unique.calCurves[i],samplesize[s,i]))
-		    randomSDs = c(randomSDs,randomSDs.tmp)
 	    }
+
+	    randomSDs <- sample(size=length(unlist(randomDates)), errors, replace=TRUE) 
     }
 
 
-        tmp <- calibrate(x=unlist(randomDates),errors=randomSDs, timeRange=timeRange, calCurves=ccurve.tmp, normalised=datenormalised, ncores=1, verbose=FALSE, calMatrix=TRUE) 
+        tmp <- calibrate(x=unlist(randomDates),errors=randomSDs, timeRange=timeRange, calCurves=ccurve.tmp, normalised=normalised, ncores=1, verbose=FALSE, calMatrix=TRUE) 
 
         simDateMatrix <- tmp$calmatrix 
 	sim[,s] <- apply(simDateMatrix,1,sum) 
@@ -193,74 +299,118 @@ modelTest <- function(x, errors, nsim, bins=NA, runm=NA, timeRange=NA, raw=FALSE
     {	     
 	    print("Progress bar disabled for multi-core processing")
 	    sim <- foreach (s = 1:nsim, .combine='cbind', .packages='rcarbon') %dopar% {
+		    
+		    randomDates <- vector("list",length=ncc)
+		    ccurve.tmp <- numeric()
 
 		    if (method=="uncalsample")
 		    {
-			    randomDates <- vector("list",length=ncc)
-			    ccurve.tmp <- numeric()
 			    for (i in 1:ncc)
-			    {
+			    {       
 				    randomDates[[i]] = sample(cragrids[[i]]$CRA,replace=TRUE,size=samplesize[s,i],prob=cragrids[[i]]$PrDens)
 				    ccurve.tmp = c(ccurve.tmp,rep(unique.calCurves[i],samplesize[s,i]))
 			    }
-        randomSDs <- sample(size=length(unlist(randomDates)), errors, replace=TRUE) 
 		    }
 
 
 		    if (method=="calsample")
 		    {
-			    randomDates <- vector("list",length=ncc)
-			    ccurve.tmp <- numeric()
-			    randomSDs <- numeric()	
-
 			    for (i in 1:ncc)
-			    {
-
-				    randomSDs.tmp=sample(size=samplesize[s,i],errors,replace=TRUE)
-				    randomDates[[i]] <- uncalibrate(sample(predgrid$calBP,replace=TRUE,size=samplesize[s,i],prob=predgrid$PrDens),randomSDs.tmp,calCurves=unique.calCurves[i])$rCRA   
+			    {       
+				    randomDates[[i]] = sample(cragrids[[i]]$CRA,replace=TRUE,size=samplesize[s,i],prob=cragrids[[i]]$Raw)
 				    ccurve.tmp = c(ccurve.tmp,rep(unique.calCurves[i],samplesize[s,i]))
-				    randomSDs = c(randomSDs,randomSDs.tmp)
 			    }
 		    }
-	    
-	    tmp <- calibrate(x=unlist(randomDates),errors=randomSDs, timeRange=timeRange, calCurves=ccurve.tmp, normalised=datenormalised, ncores=1, verbose=FALSE, calMatrix=TRUE) 
-	    
-	    simDateMatrix <- tmp$calmatrix
-	    aux <- apply(simDateMatrix,1,sum)
-	    aux <- (aux/sum(aux)) * sum(predgrid$PrDens[predgrid$calBP <= timeRange[1] & predgrid$calBP >= timeRange[2]])
-	    if (spdnormalised){ aux <- (aux/sum(aux)) }
-	    if (!is.na(runm)){
-		    aux <- runMean(aux, runm, edge="fill")
-	    }
-	    aux
+
+		    randomSDs <- sample(size=length(unlist(randomDates)), errors, replace=TRUE) 
+
+
+		    tmp <- calibrate(x=unlist(randomDates),errors=randomSDs, timeRange=timeRange, calCurves=ccurve.tmp, normalised=normalised, ncores=1, verbose=FALSE, calMatrix=TRUE) 
+
+		    simDateMatrix <- tmp$calmatrix
+		    aux <- apply(simDateMatrix,1,sum)
+		    aux <- (aux/sum(aux)) * sum(predgrid$PrDens[predgrid$calBP <= timeRange[1] & predgrid$calBP >= timeRange[2]])
+		    if (spdnormalised){ aux <- (aux/sum(aux)) }
+		    if (!is.na(runm)){
+			    aux <- runMean(aux, runm, edge="fill")
+		    }
+		    aux
 	    }
     }
-
-
     if (verbose){ close(pb) }
+
+
+
+    ## rate of change subroutine
+    timeSequence = timeRange[1]:timeRange[2]
+
+    foo = function(spd,backsight,timeSequence,changexpr)
+    {
+	    obs=rep(NA,length(timeSequence))
+
+	    for (i in 1:c(length(obs)-backsight))
+	    {
+		    d=backsight 	
+		    t0 = spd[i]
+		    t1 = spd[i+backsight]
+		    obs[i+backsight] = eval(changexpr)
+		    if (t1==0|t0==0){obs[i+backsight]=NA}
+	    }
+	    return(obs)
+    }
+
+    obs.roc = foo(finalSPD,backsight=backsight,timeSequence=timeSequence,changexpr=changexpr)
+    sim.roc = apply(sim,2,foo,backsight=backsight,timeSequence=timeSequence,changexpr=changexpr)
+    
+    
     ## Envelope, z-scores, global p-value
-    lo <- apply(sim,1,quantile,prob=0.025)
-    hi <- apply(sim,1,quantile,prob=0.975)
+    
+    lo <- apply(sim,1,quantile,prob=0.025,na.rm=TRUE)
+    hi <- apply(sim,1,quantile,prob=0.975,na.rm=TRUE)
+    lo.roc = apply(sim.roc,1,quantile,prob=0.025,na.rm=TRUE)
+    hi.roc = apply(sim.roc,1,quantile,prob=0.975,na.rm=TRUE)
+
     Zsim <- t(apply(sim,1,scale))
     zLo <- apply(Zsim,1,quantile,prob=0.025,na.rm=TRUE)
     zHi <- apply(Zsim,1,quantile,prob=0.975,na.rm=TRUE)
+    Zsim.roc <- t(apply(sim.roc,1,scale))
+    zLo.roc <- apply(Zsim.roc,1,quantile,prob=0.025,na.rm=TRUE)
+    zHi.roc <- apply(Zsim.roc,1,quantile,prob=0.975,na.rm=TRUE)
+    
     Zscore_empirical <- (finalSPD - apply(sim, 1, mean))/apply(sim, 1, sd)
+    Zscore_empirical.roc <- (obs.roc - apply(sim.roc, 1, mean))/apply(sim.roc, 1, sd)
+
     busts <- which(Zscore_empirical< zLo)
     booms <- which(Zscore_empirical> zHi)
     busts2 <- which(finalSPD< lo)
     booms2 <- which(finalSPD> hi)
+    busts.roc <- which(Zscore_empirical.roc < zLo.roc)
+    booms.roc <- which(Zscore_empirical.roc > zHi.roc)
+    busts2.roc <- which(obs.roc < lo.roc)
+    booms2.roc <- which(obs.roc > hi.roc)
+
     observedStatistic <- sum(c(zLo[busts] - Zscore_empirical[busts]),c(Zscore_empirical[booms]-zHi[booms]))
+    observedStatistic.roc <- sum(c(zLo.roc[busts.roc] - Zscore_empirical.roc[busts.roc]),c(Zscore_empirical.roc[booms.roc]-zHi.roc[booms.roc]))
+
     expectedstatistic <- abs(apply(Zsim,2,function(x,y){a=x-y;i=which(a<0);return(sum(a[i]))},y=zLo)) + apply(Zsim,2,function(x,y){a=x-y;i=which(a>0);return(sum(a[i]))},y=zHi)
+    expectedstatistic.roc <- abs(apply(Zsim.roc,2,function(x,y){a=x-y;i=which(a<0);return(sum(a[i]))},y=zLo.roc)) + apply(Zsim.roc,2,function(x,y){a=x-y;i=which(a>0);return(sum(a[i]))},y=zHi.roc)
+
     pvalue <- c(length(expectedstatistic[expectedstatistic > observedStatistic])+1)/c(nsim+1)
+    pvalue.roc <- c(length(expectedstatistic.roc[expectedstatistic.roc > observedStatistic.roc])+1)/c(nsim+1)
+
+
     # Results
     result <- data.frame(calBP=observed$grid$calBP,PrDens=finalSPD,lo=lo,hi=hi)
-    if(raw==FALSE){ sim <- NA }
-    res <- list(result=result, sim=sim, pval=pvalue, fit=predgrid, fitobject=fit,nbins=length(unique(bins)),n=nrow(x$metadata),nsim=nsim)
+    result.roc <- data.frame(calBP=timeSequence,roc=obs.roc,lo.roc=lo.roc,hi.roc=hi.roc) #time is midpoint of transition
+
+
+    predgrid <- subset(predgrid,calBP<=timeRange[1]&calBP>=timeRange[2])
+    if(raw==FALSE){ sim <- NA; sim.roc<-NA }
+    res <- list(result=result,result.roc=result.roc, sim=sim, sim.roc=sim.roc, pval=pvalue, pval.roc=pvalue.roc, fit=predgrid, fitobject=fit,nbins=length(unique(bins)),n=nrow(x$metadata),nsim=nsim,backsight=backsight)
     class(res) <- "SpdModelTest"
     if (verbose){ print("Done.") }
     return(res)
 }
-
 
 #' @title  Random mark permutation test for SPDs
 #'
@@ -269,6 +419,8 @@ modelTest <- function(x, errors, nsim, bins=NA, runm=NA, timeRange=NA, raw=FALSE
 #' @param x A \code{CalDates} class object containing the calibrated radiocarbon dates.
 #' @param marks A numerical or character vector containing the marks associated to each radiocarbon date.
 #' @param timeRange  A vector of length 2 indicating the start and end date of the analysis in cal BP.
+#' @param backsight A single numeric value defining the distance in time between the focal year and the backsight year for computing the rate of change. Default is 10.
+#' @param changexpr An expression for calculating the rate of change in SPD between the focal year and a backsight year. Available input options are t1 (the SPD for the focal year), t0 (the SPD for the backsight year), d (the distance between t0 and t1), and any other standard constants and mathematical operators. A sensible default is provided.
 #' @param bins  A vector indicating which bin each radiocarbon date is assigned to.  
 #' @param nsim Number of random permutations 
 #' @param runm A number indicating the window size of the moving average to smooth the SPD. If set to \code{NA} no moving average is applied.Default is NA.  
@@ -311,10 +463,10 @@ modelTest <- function(x, errors, nsim, bins=NA, runm=NA, timeRange=NA, raw=FALSE
 #' @import doParallel
 #' @export
 
-
-permTest <- function(x, marks,  timeRange, nsim, bins=NA, runm=NA, datenormalised=FALSE, spdnormalised=FALSE, raw=FALSE, verbose=TRUE){
+permTest <- function(x, marks, timeRange, backsight=10,changexpr=expression((t1/t0)^(1/d)-1),nsim, bins=NA, runm=NA, datenormalised=FALSE, spdnormalised=FALSE, raw=FALSE, verbose=TRUE){
 
     if (is.na(bins[1])){ bins <- as.character(1:nrow(x$metadata)) }
+    marks <- as.character(marks) 
     binNames <- unique(bins)
     calyears <- data.frame(calBP=seq(timeRange[1], timeRange[2],-1))
     binnedMatrix <- matrix(nrow=nrow(calyears), ncol=length(binNames))
@@ -367,6 +519,7 @@ permTest <- function(x, marks,  timeRange, nsim, bins=NA, runm=NA, datenormalise
         }
         GroupList[b] <- marks[index][1]
     }
+
     if (verbose & length(binNames)>1){ close(pb) }
     observedSPD <- vector("list",length=length(unique(GroupList)))
     names(observedSPD) <- unique(GroupList)
@@ -416,38 +569,102 @@ permTest <- function(x, marks,  timeRange, nsim, bins=NA, runm=NA, datenormalise
     }
     names(simulatedSPD) <- unique(GroupList)
     if (verbose){ close(pb) }
-    ## Statistics
-    simulatedCIlist <- vector("list",length=length(unique(GroupList)))
-    for (d in 1:length(unique(GroupList))){
-        simulatedCIlist[[d]] <- cbind(apply(simulatedSPD[[d]],1,quantile,prob=c(0.025)), apply(simulatedSPD[[d]],1,quantile,prob=c(0.975)))
-        names(simulatedCIlist) <- unique(GroupList)
+
+    #compute rates of change
+    timeSequence = timeRange[1]:timeRange[2]
+
+    foo = function(spd,backsight,timeSequence,changexpr)
+    {
+	    obs=rep(NA,length(timeSequence))
+
+	    for (i in 1:c(length(obs)-backsight))
+	    {
+		    d=backsight 	
+		    t0 = spd[i]
+		    t1 = spd[i+backsight]
+		    obs[i+backsight] = eval(changexpr)
+		    if (t1==0|t0==0){obs[i+backsight]=NA}
+	    }
+	    return(obs)
     }
-    pValueList <- numeric(length=length(simulatedSPD))
+
+  observedROC = simulatedROC = vector("list",length=length(observedSPD))
+
+  for (i in 1:length(observedSPD))
+  {
+    tmp=foo(observedSPD[[i]][,2],backsight=backsight,timeSequence=timeSequence,changexpr=changexpr)
+    observedROC[[i]] = data.frame(calBP=timeSequence,roc=tmp)
+    names(observedROC)[[i]]=names(observedSPD)[[i]]
+    simulatedROC[[i]] = apply(simulatedSPD[[i]],2,foo,backsight=backsight,timeSequence=timeSequence,changexpr=changexpr)
+  }
+
+
+    ## Simulation Envelope
+    simulatedCIlist = simulatedCIlist.roc = vector("list",length=length(unique(GroupList)))
+    for (d in 1:length(unique(GroupList))){
+        simulatedCIlist[[d]] <- cbind(apply(simulatedSPD[[d]],1,quantile,prob=c(0.025),na.rm=TRUE), apply(simulatedSPD[[d]],1,quantile,prob=c(0.975),na.rm=TRUE))
+        simulatedCIlist.roc[[d]] <- cbind(apply(simulatedROC[[d]],1,quantile,prob=c(0.025),na.rm=TRUE), apply(simulatedROC[[d]],1,quantile,prob=c(0.975),na.rm=TRUE))
+        names(simulatedCIlist) <- unique(GroupList)
+        names(simulatedCIlist.roc) <- unique(GroupList)
+    }
+
+
+
+
+    ## Compute Global P-value
+    pValueList = pValueList.roc = numeric(length=length(simulatedSPD))
+
     for (a in 1:length(simulatedSPD)){
         zscoreMean <- apply(simulatedSPD[[a]],1,mean)
         zscoreSD <- apply(simulatedSPD[[a]],1,sd)
+        zscoreMean.roc <- apply(simulatedROC[[a]],1,mean,na.rm=TRUE)
+        zscoreSD.roc <- apply(simulatedROC[[a]],1,sd,na.rm=TRUE)
+
         tmp.sim <- t(apply(simulatedSPD[[a]],1,function(x){ return((x - mean(x))/sd(x)) }))
-        tmp.sim[is.na(tmp.sim)] <- 0
+        tmp.sim.roc <- t(apply(simulatedROC[[a]],1,function(x){ return((x - mean(x))/sd(x)) }))
+#         tmp.sim[is.na(tmp.sim)] <- 0
+
         tmp.obs <- observedSPD[[a]]
         tmp.obs[,2] <- (tmp.obs[,2] - zscoreMean) / zscoreSD
-        tmp.obs[is.na(tmp.obs[,2]),2] <- 0
-        tmp.ci <- t(apply(tmp.sim,1, quantile, prob=c(0.025,0.975)))
+#         tmp.obs[is.na(tmp.obs[,2]),2] <- 0
+        tmp.obs.roc <- observedROC[[a]]
+        tmp.obs.roc[,2] <- (tmp.obs.roc[,2] - zscoreMean.roc) / zscoreSD.roc
+
+        tmp.ci <- t(apply(tmp.sim,1, quantile, prob=c(0.025,0.975),na.rm=TRUE))
+        tmp.ci.roc <- t(apply(tmp.sim.roc,1, quantile, prob=c(0.025,0.975),na.rm=TRUE))
+
         expectedstatistic <- abs(apply(tmp.sim,2,function(x,y){a=x-y;i=which(a<0);return(sum(a[i]))},y=tmp.ci[,1])) + apply(tmp.sim,2,function(x,y){a=x-y;i=which(a>0);return(sum(a[i]))},y=tmp.ci[,2])   
+        expectedstatistic.roc <- abs(apply(tmp.sim.roc,2,function(x,y){a=x-y;i=which(a<0);return(sum(a[i]))},y=tmp.ci.roc[,1])) + apply(tmp.sim.roc,2,function(x,y){a=x-y;i=which(a>0);return(sum(a[i]))},y=tmp.ci.roc[,2])   
         lower <- tmp.obs[,2] - tmp.ci[,1]
         indexLow <- which(tmp.obs[,2] < tmp.ci[,1])
         higher <- tmp.obs[,2] - tmp.ci[,2]
         indexHi <- which(tmp.obs[,2] > tmp.ci[,2])
+        lower.roc <- tmp.obs.roc[,2] - tmp.ci.roc[,1]
+        indexLow.roc <- which(tmp.obs.roc[,2] < tmp.ci.roc[,1])
+        higher.roc <- tmp.obs.roc[,2] - tmp.ci.roc[,2]
+        indexHi.roc <- which(tmp.obs.roc[,2] > tmp.ci.roc[,2])
+
         observedStatistic <- sum(abs(lower[indexLow]))+sum(higher[indexHi])
+        observedStatistic.roc <- sum(abs(lower.roc[indexLow.roc]))+sum(higher.roc[indexHi.roc])
+
         pValueList[[a]] <- 1
+        pValueList.roc[[a]] <- 1
+
         if (observedStatistic>0){    
             pValueList[[a]] <-c(length(expectedstatistic[expectedstatistic > observedStatistic])+1)/c(nsim+1)
-#	1 - c(length(expectedstatistic[expectedstatistic <= observedStatistic])+1)/c(length(expectedstatistic)+1)
-
         }
+        if (observedStatistic.roc>0){    
+            pValueList.roc[[a]] <-c(length(expectedstatistic.roc[expectedstatistic.roc > observedStatistic.roc])+1)/c(nsim+1)
+        }
+
         names(pValueList) <- unique(GroupList)
-    }        
+    } 
+
     res <- list(observed=observedSPD, envelope=simulatedCIlist, pValueList=pValueList)
-    
+    res$observed.roc=observedROC
+    res$envelope.roc=simulatedCIlist.roc
+    res$pValueList.roc=pValueList.roc
+
     metadata=vector("list",length=length(unique(GroupList)))
     names(metadata) = unique(GroupList)
 	for (k in 1:length(unique(GroupList)))
@@ -458,12 +675,37 @@ permTest <- function(x, marks,  timeRange, nsim, bins=NA, runm=NA, datenormalise
 	}
     res$nsim = nsim
     res$metadata = metadata    
-    if (raw){ res$raw <- simulatedSPD }
+    res$backsight = backsight
+    if (raw)
+    {
+	    res$raw <- simulatedSPD
+	    res$raw.row <- simulatedROC
+    }
     class(res) <- "SpdPermTest"
     if (verbose){ print("Done.") }
     return(res)
 }
 
+
+#' @title Spatial Permutation Test of summed probability distributions.
+#' @description This function is deprecated. Please use \code{\link{sptest}} instead.
+#' @return A \code{spatialTest} class object
+#' @name SPpermTest-deprecated
+#' @usage SPpermTest(calDates, timeRange, bins, locations, breaks, 
+#' spatialweights,rate=expression((t2/t1)^(1/d)-1), nsim=1000, runm=NA,permute="locations",
+#' ncores=1,datenormalised=FALSE,verbose=TRUE,raw=FALSE)
+#' @seealso \code{\link{rcarbon-deprecated}}
+#' @keywords internal
+NULL
+#' @rdname rcarbon-deprecated
+#' @section \code{SPpermTest}:
+#' For \code{SPpermTest}, use \code{\link{sptest}}.
+#' @export
+SPpermTest<-function(calDates, timeRange, bins, locations, breaks, spatialweights, rate=expression((t2/t1)^(1/d)-1),nsim=1000, runm=NA,permute="locations",ncores=1,datenormalised=FALSE,verbose=TRUE,raw=FALSE)
+{
+.Deprecated("sptest")
+ sptest(calDates=calDates, timeRange=timeRange, bins=bins, locations=locations, breaks=breaks, spatialweights=spatialweights,rate=rate, nsim=nsim, runm=runm,permute=permute,ncores=ncores,datenormalised=datenormalised,verbose=verbose,raw=raw)
+}
 
 
 #' @title Spatial Permutation Test of summed probability distributions.
@@ -476,14 +718,14 @@ permTest <- function(x, marks,  timeRange, nsim, bins=NA, runm=NA, datenormalise
 #' @param locations A \code{SpatialPoints} or a \code{SpatialPointsDataFrame} class object. Rownames of each point should much the first part of the bin names supplied (e.g. "S023","S034") 
 #' @param breaks A vector of break points for defining the temporal slices.
 #' @param spatialweights A \code{spatialweights} class object defining the spatial weights between the locations (cf. \code{\link{spweights}})
+#' @param rate An expression defining how the rate of change is calculated, where \code{t1} is the summed probability for a focal block, \code{t2} is the summed probability for next block, and \code{d} is the duration of the blocks. Default is a geometric growth rate (i.e \code{expression((t2/t1)^(1/d)-1)}).
 #' @param nsim The total number of simulations. Default is 1000.
 #' @param runm The window size of the moving window average. Must be set to \code{NA} if the rates of change are calculated from the raw SPDs. 
 #' @param permute Indicates whether the permutations should be based on the \code{"bins"} or the \code{"locations"}. Default is \code{"locations"}. 
 #' @param ncores Number of cores used for for parallel execution. Default is 1.
 #' @param datenormalised A logical variable indicating whether the probability mass of each date within \code{timeRange} is equal to 1. Default is FALSE. 
-#' @param raw A logical variable indicating whether permuted sets of geometric growth rates for each location should be returned. Default is FALSE. 
 #' @param verbose A logical variable indicating whether extra information on progress should be reported. Default is TRUE.
-#'
+#' @param raw A logical variable indicating whether permuted sets of geometric growth rates for each location should be returned. Default is FALSE. 
 #'
 #' @details The function consists of the following seven steps: 1) for each location (e.g. a site) generate a local SPD of radiocarbon dates, weighting the contribution of dates from neighbouring sites using a weight scheme provided by the \code{spatialweights} class object; 2) define temporal slices (using \code{breaks} as break values), then compute the total probability mass within each slice; 3) compute the rate of change between abutting temporal slices by using the formula: \eqn{(SPD_{t}/SPD_{t+1}^{1/\Delta t}-1)}; 4) randomise the location of individual bins or the entire sequence of bins associated with a given location and carry out steps 1 to 3; 5) repeat step 4 \code{nsim} times and generate, for each location, a distribution of growth rates under the null hypothesis (i.e. spatial independence); 6) compare, for each location, the observed growth rate with the distribution under the null hypothesis and compute the p-values; and 7) compute the false-discovery rate for each location.    
 #'
@@ -492,7 +734,7 @@ permTest <- function(x, marks,  timeRange, nsim, bins=NA, runm=NA, datenormalise
 #' @references
 #' Crema, E.R., Bevan, A., Shennan, S. (2017). Spatio-temporal approaches to archaeological radiocarbon dates. Journal of Archaeological Science, 87, 1-9.
 #' 
-#' @seealso \code{\link{permTest}} for a non-spatial permutation test; \code{\link{plot.spatialTest}} for plotting; \code{\link{spweights}} for computing spatial weights; \code{\link{spd2gg}} for computing geometric growth rates.
+#' @seealso \code{\link{permTest}} for a non-spatial permutation test; \code{\link{plot.spatialTest}} for plotting; \code{\link{spweights}} for computing spatial weights; \code{\link{spd2rc}} for computing geometric growth rates.
 #'
 #' @examples
 #' ## Reproduce Crema et al 2017 ##
@@ -528,7 +770,7 @@ permTest <- function(x, marks,  timeRange, nsim, bins=NA, runm=NA, datenormalise
 #' ## Main Analysis (over 2 cores; requires doParallel package) 
 #' ## NOTE: the number of simulations should be ideally larger 
 #' ## to ensure a better resolution of the p/q-values.
-#' res.locations=SPpermTest(calDates,timeRange=timeRange,bins=bins,locations=locations,
+#' res.locations=sptest(calDates,timeRange=timeRange,bins=bins,locations=locations,
 #' spatialweights=spatialweights,breaks=breaks,ncores=2,nsim=100,
 #' permute="locations",datenormalised=FALSE)
 #' 
@@ -542,12 +784,10 @@ permTest <- function(x, marks,  timeRange, nsim, bins=NA, runm=NA, datenormalise
 #' par(mfrow=c(2,2))  
 #' par(mar=c(0.1,0.1,0,0.5))
 #' plot(base,col="antiquewhite3",border="antiquewhite3",xlim=xrange,ylim=yrange)
-#' plot(res.locations,index=4,add=TRUE,option="raw",breakRange=c(-0.005,0.005)) 
-#' plot(res.locations,option="rawlegend",breakRange=c(-0.005,0.005),rd=3)
+#' plot(res.locations,index=4,add=TRUE,legend=TRUE,option="raw",breakRange=c(-0.005,0.005)) 
 #' par(mar=c(0.1,0.1,0,0.5))
 #' plot(base,col="antiquewhite3",border="antiquewhite3",xlim=xrange,ylim=yrange) 
-#' plot(res.locations,index=4,add=TRUE,option="test")  
-#' plot(res.locations,option="testlegend")
+#' plot(res.locations,index=4,add=TRUE,legend=TRUE,option="test")  
 #' }
 #' @import utils
 #' @import stats
@@ -558,7 +798,7 @@ permTest <- function(x, marks,  timeRange, nsim, bins=NA, runm=NA, datenormalise
 #' @export
  
 
-SPpermTest<-function(calDates, timeRange, bins, locations, breaks, spatialweights, nsim=1000, runm=NA,permute="locations",ncores=1,datenormalised=FALSE,verbose=TRUE,raw=FALSE)
+sptest<-function(calDates, timeRange, bins, locations, breaks, spatialweights, rate=expression((t2/t1)^(1/d)-1),nsim=1000, runm=NA,permute="locations",ncores=1,datenormalised=FALSE,verbose=TRUE,raw=FALSE)
 {
 
 	###################################
@@ -635,7 +875,7 @@ SPpermTest<-function(calDates, timeRange, bins, locations, breaks, spatialweight
 		slist <- lapply(slist, FUN=function(x) x[with(x, order(-calBP)), ])
 		tmp <- lapply(slist,`[`,2)
 		if (datenormalised){
-			tmp <- lapply(tmp,FUN=function(x) x/sum(x))
+			tmp <- lapply(tmp,FUN=function(x) {if(sum(x)!=0){return(x/sum(x))}else{return(x)}})
 		}
 		if (length(binNames)>1){
 			spd.tmp <- Reduce("+", tmp) / length(index)
@@ -689,15 +929,26 @@ SPpermTest<-function(calDates, timeRange, bins, locations, breaks, spatialweight
 
 	## Compute Rate of Change #3
 
-	rocaObs=t(apply(obsGridVal,1,function(x,d){
+	rocaObs=t(apply(obsGridVal,1,function(x,d,rate){
 				L=length(x)
 				res=numeric(length=L-1)
 				for (i in 1:c(L-1))
 				{
-					res[i]=(x[i+1]/x[i])^(1/d)-1
+					t2 = x[i+1]
+					t1 = x[i]
+					res[i] = eval(rate)
+# 					res[i]=(x[i+1]/x[i])^(1/d)-1
+					# If no spd for both period the rate is NA
+					if (x[i+1]==0|x[i]==0)
+					{
+						res[i]=NA	
+					}
 				}
 				return(res)},
-				d=abs(breaks[2]-breaks[1])))
+				d=abs(breaks[2]-breaks[1]),
+				rate=rate))
+	#if single transition transpose matrix:
+	if (nBreaks==2){rocaObs=t(rocaObs)} 
 
 	##############################
 	### Permutation Subroutine ###
@@ -760,15 +1011,23 @@ SPpermTest<-function(calDates, timeRange, bins, locations, breaks, spatialweight
 
 			## Compute Rate of Change ##
 
-			rocaSim=t(apply(simGridVal,1,function(x,d){
+			rocaSim=t(apply(simGridVal,1,function(x,d,rate){
 						L=length(x)
 						res=numeric(length=L-1)
 						for (i in 1:c(L-1))
 						{
-							res[i]=(x[i+1]/x[i])^(1/d)-1
+							t2 = x[i+1]
+							t1 = x[i]
+							res[i] = eval(rate)
+# 							res[i]=(x[i+1]/x[i])^(1/d)-1
+							if (x[i+1]==0|x[i]==0)
+							{
+								res[i]=NA
+							}
 						}
 						return(res)},
-						d=abs(breaks[2]-breaks[1])))
+						d=abs(breaks[2]-breaks[1]),
+						rate=rate))
 
 			lo=rocaObs<rocaSim	    
 			hi=rocaObs>rocaSim
@@ -788,18 +1047,22 @@ SPpermTest<-function(calDates, timeRange, bins, locations, breaks, spatialweight
 		lo=matrix(0,nrow=nrow(spatialweights$w),ncol=nBreaks-1)
 		eq=matrix(0,nrow=nrow(spatialweights$w),ncol=nBreaks-1)
 
-		print("Permutation test...")
-		flush.console()
+
+		if(verbose){
+			print("Permutation test...")
+			flush.console()
+		}
 
 		if(raw)
 		{
 			rocaSimAll = array(NA,dim=c(nsim,nrow(spatialweights$w),nBreaks-1))
 		}
-		pb <- txtProgressBar(min = 1, max = nsim, style=3)
+		
+		if(verbose){pb <- txtProgressBar(min = 1, max = nsim, style=3)}
 
 		for (s in 1:nsim)
 		{
-			setTxtProgressBar(pb, s)
+			if(verbose){setTxtProgressBar(pb, s)}
 			simGridVal<-matrix(NA,nrow=nrow(spatialweights$w),ncol=nBreaks)
 			## Aggregate by Site ## 
 			simResMatrix=matrix(0,nrow=length(unique(locations.id)),ncol=nrow(binnedMatrix))
@@ -844,35 +1107,48 @@ SPpermTest<-function(calDates, timeRange, bins, locations, breaks, spatialweight
 
 
 			##Compute Rate of Change
-			rocaSim=t(apply(simGridVal,1,function(x,d){
+			rocaSim=t(apply(simGridVal,1,function(x,d,rate){
 						L=length(x)
 						res=numeric(length=L-1)
 						for (i in 1:c(L-1))
 						{
-							res[i]=(x[i+1]/x[i])^(1/d)-1
+							t2 = x[i+1]
+							t1 = x[i]
+							res[i] = eval(rate)
+# 							res[i]=(x[i+1]/x[i])^(1/d)-1
+							if (x[i+1]==0|x[i]==0)
+							{
+								res[i]=NA	
+							}
 						}
 						return(res)},
-						d=abs(breaks[2]-breaks[1])))
+						d=abs(breaks[2]-breaks[1]),
+						rate=rate))
+
+			# if single transition transpose matrix:
+			if (nBreaks==2) {rocaSim=t(rocaSim)}
 
 			hi=hi+(rocaObs>rocaSim)
 			lo=lo+(rocaObs<rocaSim)
 			eq=eq+(rocaObs==rocaSim)
 			if(raw){rocaSimAll[s,,]=rocaSim}
 		}
-		close(pb)
+		if(verbose){close(pb)}
 	}
 
 
 	############################
 	### Compute Significance ###
 	############################ 
-
+	
 	pvalHi=(lo+eq+1)/c(nsim+1)
 	pvalLo=(hi+eq+1)/c(nsim+1)
 	pval=pvalHi
 	pval[which(pvalHi>pvalLo)]=pvalLo[which(pvalHi>pvalLo)]
 	pval=pval*2
-	if (max(pval)>1)
+
+
+	if (max(pval,na.rm=TRUE)>1)
 	{
 		pval[which(pval>1)]=1
 	}
@@ -918,7 +1194,7 @@ SPpermTest<-function(calDates, timeRange, bins, locations, breaks, spatialweight
 #' ## Example with Younger Dryas period Near East, including site bins
 #' \dontrun{
 #' data(emedyd)
-#' caldates <- calibrate(x=emedyd$CRA, errors=emedyd$Error, normalised=FALSE, calMatrix=TRUE)
+#' caldates <- calibrate(x=emedyd$CRA, errors=emedyd$Error, normalised=FALSE)
 #' bins <- binPrep(sites=emedyd$SiteName, ages=emedyd$CRA, h=50)
 #' nsim=10 #toy example
 #' expnull <- modelTest(caldates, errors=emedyd$Error, bins=bins, nsim=nsim, runm=50,
@@ -1012,30 +1288,49 @@ p2pTest <- function(x,p1=NA,p2=NA,interactive=TRUE,plot=FALSE)
 #' @description \code{summary} method for class "\code{SpdModelTest}" 
 #'
 #' @param object A \code{SpdModelTest} class object produced using the \code{link{modelTest}} function.
+#' @param type Specifies whether the summary should be based on SPD ('spd') or associated rates of change ('roc'). Default is 'spd'.
 #' @param ... Ignored
 #'
-#' @details The summary function returns metadata (number of radiocarbon dates, bins, and simulations), the p-value of the global signficance test, and the chronological interval of local positive and negative deviations from the simulation envelope.
+#' @details The summary function returns metadata (number of radiocarbon dates, bins, and simulations), the p-value of the global significance test, and the chronological interval of local positive and negative deviations from the simulation envelope.
 #' @seealso \code{\link{modelTest}}.
 #' @import utils
 #' @import stats
+#' @method summary SpdModelTest
 #' @export
 
-summary.SpdModelTest<-function(object,...) {
+summary.SpdModelTest<-function(object,type='spd',...) {
+
+	if (!type%in%c('spd','roc'))
+	{
+	 stop("The argument 'type' should be either 'spd' or 'roc'.")
+	}
 
 	cat("'modelTest()' function summary:\n")
 	cat("\n") 
 	cat(paste("Number of radiocarbon dates: ",object$n,"\n",sep=""))
 	cat(paste("Number of bins: ",object$nbins,"\n",sep=""))
+	if(type=='roc'){cat(paste("Backsight size: ",object$backsight,"\n",sep=""))}
 	cat("\n")
 	cat(paste("Statistical Significance computed using ",object$nsim," simulations. \n",sep=""))
-	cat(paste("Global p-value: ",round(object$pval,5),".\n",sep=""))
+	if(type=='spd'){cat(paste("Global p-value: ",round(object$pval,5),".\n",sep=""))}
+	if(type=='roc'){cat(paste("Global p-value (rate of change): ",round(object$pval.roc,5),".\n",sep=""))}
 	cat("\n")
 
-
+	if (type=='spd')
+	{
 	obs <- object$result[,1:2]
 	envelope <- object$result[,3:4]
 	booms <- which(obs$PrDens>envelope[,2])
 	busts <- which(obs$PrDens<envelope[,1])
+	}
+
+	if (type=='roc')
+	{
+	obs <- object$result.roc[,1:2]
+	envelope <- object$result.roc[,3:4]
+	booms <- which(obs$roc>envelope[,2])
+	busts <- which(obs$roc<envelope[,1])
+	}
 
 
 	if (length(booms)>0)
@@ -1043,78 +1338,80 @@ summary.SpdModelTest<-function(object,...) {
 		cat(paste("Signficant positive local deviations at:\n"))
 		i=1
 		while (i < length(obs$calBP))
-		{	
-			if(obs$PrDens[i]>envelope[i,2])
-			{
-				ss=obs$calBP[i]
-				while(obs$PrDens[i]>envelope[i,2])
+		{
+			if(!is.na(obs[i,2]))
+			{	
+				if(obs[i,2]>envelope[i,2])
 				{
-					ee=obs$calBP[i]
-					i=i+1
-					if (i>length(obs$calBP))
+					ss=obs$calBP[i]
+					while(obs[i,2]>envelope[i,2])
 					{
-						i = length(obs$calBP)
 						ee=obs$calBP[i]
-						break()
+						i=i+1
+						if (i>length(obs$calBP))
+						{
+							i = length(obs$calBP)
+							ee=obs$calBP[i]
+							break()
+						}
 					}
+					if (ss!=ee)	
+						cat(paste(ss,"~",ee," BP \n",sep=""))
+					if (ss==ee)	
+						cat(paste(ss," BP \n",sep=""))
 				}
-				if (ss!=ee)	
-					cat(paste(ss,"~",ee," BP \n",sep=""))
-				if (ss==ee)	
-					cat(paste(ss," BP \n",sep=""))
-			}
+		}
 			i = i+1
-
 		}
 	}
 
 
 	if (length(booms)==0)
 	{
-		cat(paste("No signficant positive local deviations"))
+		cat(paste("No significant positive local deviations"))
 	}
 
 	cat("\n")
 
 	if (length(busts)>0)
 	{
-		cat(paste("Signficant negative local deviations at:\n"))
+		cat(paste("Significant negative local deviations at:\n"))
 
 
 		i=1
 		while (i < length(obs$calBP))
-		{	
-			if(obs$PrDens[i]<envelope[i,1])
-			{
-				ss=obs$calBP[i]
-				while(obs$PrDens[i]<envelope[i,1])
+		{
+			if(!is.na(obs[i,2]))
+			{	
+				if(obs[i,2]<envelope[i,1])
 				{
-					ee=obs$calBP[i]
-					i=i+1
-					if (i>length(obs$calBP))
+					ss=obs$calBP[i]
+					while(obs[i,2]<envelope[i,1])
 					{
-						i = length(obs$calBP)
 						ee=obs$calBP[i]
-						break()
+						i=i+1
+						if (i>length(obs$calBP))
+						{
+							i = length(obs$calBP)
+							ee=obs$calBP[i]
+							break()
+						}
 					}
+					if (ss!=ee)	
+						cat(paste(ss,"~",ee," BP \n",sep=""))
+					if (ss==ee)	
+						cat(paste(ss," BP \n",sep=""))
 				}
-				if (ss!=ee)	
-					cat(paste(ss,"~",ee," BP \n",sep=""))
-				if (ss==ee)	
-					cat(paste(ss," BP \n",sep=""))
 			}
 			i = i+1
-
 		}
 	}
 
 
 	if (length(busts)==0)
 	{
-		cat(paste("No signficant positive local deviations"))
+		cat(paste("No significant positive local deviations"))
 	}
-
-
 }
 
 
@@ -1123,54 +1420,66 @@ summary.SpdModelTest<-function(object,...) {
 #' @description \code{summary} method for class "\code{SpdPermTest}" 
 #'
 #' @param object A \code{SpdPermTest} class object produced using the \code{link{permTest}} function.
+#' @param type Specifies whether the summary should be based on SPD ('spd') or associated rates of change ('roc'). Default is 'spd'.
 #' @param ... Ignored
 #'
-#' @details The summary function returns metadata (number of radiocarbon dates, bins, and simulations), the p-value of the global signficance test, and the chronological interval of local positive and negative deviations from the simulation envelope for each set.
+#' @details The summary function returns metadata (number of radiocarbon dates, bins, and simulations), the p-value of the global significance test, and the chronological interval of local positive and negative deviations from the simulation envelope for each set.
 #' @seealso  \code{\link{permTest}}.
 #' @import utils
 #' @import stats
+#' @method summary SpdPermTest
 #' @export
 
-summary.SpdPermTest<-function(object,...) {
+summary.SpdPermTest<-function(object,type='spd',...) {
+
+	if (!type%in%c('spd','roc'))
+	{
+	 stop("The argument 'type' should be either 'spd' or 'roc'.")
+	}
 
 	cat("'permTest()' function summary:\n")
 	cat("\n") 
 	cat(paste("Number of sets: ",length(object$observed),"\n",sep=""))
+	if(type=='roc'){cat(paste("Backsight size: ",object$backsight,"\n",sep=""))}
 	cat(paste("Statistical Significance computed using ",object$nsim," simulations. \n",sep=""))
 	cat("\n")
 	
 	for (i in 1:length(object$observed))
 	{
 
-		cat(paste("--- ",names(object$observed)[i]," ---\n",sep=""))
+		if (type=='spd'){cat(paste("--- ",names(object$observed)[i]," ---\n",sep=""))}
+		if (type=='roc'){cat(paste("--- ",names(object$observed.roc)[i]," ---\n",sep=""))}
 		cat(paste("Number of radiocarbon dates:",object$metadata[[i]][1],"\n",sep=""))
 		cat(paste("Number of bins:",object$metadata[[i]][2],"\n",sep=""))
 		cat("\n")
-		cat(paste("Global p-value: ",round(object$pValueList[i],5),"\n",sep=""))
+		if(type=='spd'){cat(paste("Global p-value: ",round(object$pValueList[i],5),"\n",sep=""))}
+		if(type=='roc'){cat(paste("Global p-value (rate of change): ",round(object$pValueList.roc[i],5),"\n",sep=""))}
 		cat("\n")
 
-		obs <- object$observed[[i]]
-		envelope <-object$envelope[[i]]
-		booms <- which(obs$PrDens>envelope[,2])
-		busts <- which(obs$PrDens<envelope[,1])
+		obs <- object$observed.roc[[i]]
+		envelope <-object$envelope.roc[[i]]
+		booms <- which(obs[,2]>envelope[,2])
+		busts <- which(obs[,2]<envelope[,1])
 
 		if (length(booms)>0)
 		{
 			cat(paste("Signficant positive local deviations at:\n"))
 			i=1
-			while (i < length(obs$calBP))
+			while (i < length(obs[,1]))
 			{	
-				if(obs$PrDens[i]>envelope[i,2])
+				if(!is.na(obs[i,2]))
 				{
-					ss=obs$calBP[i]
-					while(obs$PrDens[i]>envelope[i,2])
+				if(obs[i,2]>envelope[i,2])
+				{
+					ss=obs[i,1]
+					while(obs[i,2]>envelope[i,2])
 					{
-						ee=obs$calBP[i]
+						ee=obs[i,1]
 						i=i+1
-						if (i>length(obs$calBP))
+						if (i>length(obs[,1]))
 						{
-							i = length(obs$calBP)
-							ee=obs$calBP[i]
+							i = length(obs[,1])
+							ee=obs[i,1]
 							break()
 						}
 					}
@@ -1179,38 +1488,40 @@ summary.SpdPermTest<-function(object,...) {
 					if (ss==ee)	
 						cat(paste(ss," BP \n",sep=""))
 				}
+				}
 				i = i+1
-
 			}
 		}
 
 
 		if (length(booms)==0)
 		{
-			cat(paste("No signficant positive local deviations"))
+			cat(paste("No significant positive local deviations"))
 		}
 
 		cat("\n")
 
 		if (length(busts)>0)
 		{
-			cat(paste("Signficant negative local deviations at:\n"))
+			cat(paste("Significant negative local deviations at:\n"))
 
 
 			i=1
-			while (i < length(obs$calBP))
-			{	
-				if(obs$PrDens[i]<envelope[i,1])
+			while (i < length(obs[,1]))
+			{
+				if(!is.na(obs[i,2]))
 				{
-					ss=obs$calBP[i]
-					while(obs$PrDens[i]<envelope[i,1])
+				if(obs[i,2]<envelope[i,1])
+				{
+					ss=obs[i,1]
+					while(obs[i,2]<envelope[i,1])
 					{
-						ee=obs$calBP[i]
+						ee=obs[i,1]
 						i=i+1
-						if (i>length(obs$calBP))
+						if (i>length(obs[,1]))
 						{
-							i = length(obs$calBP)
-							ee=obs$calBP[i]
+							i = length(obs[,1])
+							ee=obs[i,1]
 							break()
 						}
 					}
@@ -1219,20 +1530,21 @@ summary.SpdPermTest<-function(object,...) {
 					if (ss==ee)	
 						cat(paste(ss," BP \n",sep=""))
 				}
+				}
 				i = i+1
-
 			}
 		}
 
 
 		if (length(busts)==0)
 		{
-			cat(paste("No signficant positive local deviations"))
+			cat(paste("No significant positive local deviations"))
 		}
 
 		cat("\n")
 	}
 }
+
 
 
 

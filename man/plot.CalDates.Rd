@@ -6,7 +6,9 @@
 \usage{
 \method{plot}{CalDates}(x, ind = 1, label = NA, calendar = "BP",
   type = "standard", xlab = NA, ylab = NA, axis4 = TRUE,
-  HPD = FALSE, credMass = 0.95, customCalCurve = NA, ...)
+  HPD = FALSE, credMass = 0.95, customCalCurve = NA, add = FALSE,
+  col = "grey50", col2 = "grey82", cex.axis = 0.75,
+  cex.xylab = 0.75, cex.label = 0.75, ...)
 }
 \arguments{
 \item{x}{\code{CalDates} class object containing calibrated radiocarbon dates.}
@@ -27,9 +29,21 @@
 
 \item{HPD}{Logical value indicating whether intervals of higher posterior density should be displayed. Default is FALSE.}
 
-\item{credMass}{A numerical value indicating the size of the higher posterior density interval. Default is 0.95 (i.e. 95\%).}
+\item{credMass}{A numerical value indicating the size of the higher posterior density interval. Default is 0.95.}
 
 \item{customCalCurve}{A three column data.frame or matrix that allows you to pass and plot a custom calibration curve if you used one during calibration. You can currently only provide one such custom curve which is used for all dates.}
+
+\item{add}{if set to \code{TRUE} the calibrated date is displayed over the existing plot. Default is \code{FALSE}.}
+
+\item{col}{The primary fill color for the calibrated date distribution.}
+
+\item{col2}{The secondary colour fill color for the calibrated date distribution, used for regions outside the higher posterior interval. Ignored when \code{HPD=FALSE}.}
+
+\item{cex.axis}{The magnification to be used for axis annotation relative to the current setting of cex. Default is adjusted to 0.75.}
+
+\item{cex.xylab}{The magnification to be used for x and y labels relative to the current setting of cex. Default is adjusted to 0.75.}
+
+\item{cex.label}{The magnification to be used for the label on the top right corner defined by the argument \code{label}. Default is adjusted to 0.75.}
 
 \item{...}{Additional arguments affecting the plot.}
 }

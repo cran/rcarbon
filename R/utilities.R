@@ -57,57 +57,15 @@ runMean <- function(x, n, edge="NA"){
     return(res)
 }
 
-
-## quickMarks <- function(x, verbose=TRUE){
-
-##     if (!"CalDates" %in% class(x)){
-##         stop("Input must be of class \"CalDates\"")
-##     }
-##     df <- as.data.frame(matrix(ncol=8,nrow=nrow(x$metadata)), stringsasFactors=TRUE)
-##     names(df) <- c("DateID","CRA","Error","qMed","q95s","q95e","q68s","q68e")
-##     print("Extracting approximate values...")
-##     if (nrow(x$metadata)>1 & verbose){
-##         flush.console()
-##         pb <- txtProgressBar(min=1, max=nrow(x$metadata), style=3)
-##     }
-##     for (a in 1:nrow(x$metadata)){
-##         if (nrow(x$metadata)>1 & verbose){ setTxtProgressBar(pb, a) }
-##         if (length(x$calmatrix)>1){
-##             tmp <- data.frame(calBP=as.numeric(row.names(x$calmatrix)),PrDens=x$calmatrix[,a])
-##             tmp <- tmp[tmp$PrDens >0,] 
-##         } else {
-##             tmp <- x$grids[[a]]
-##         }
-##         tmp <- tmp[tmp$PrDens>0,]
-##         tmp <- tmp[with(tmp, order(-PrDens)), ]
-##         tmp$Cumul <- cumsum(tmp$PrDens)
-##         tmp$Cumul <- tmp$Cumul/max(tmp$Cumul)
-##         tmp1 <- tmp[tmp$Cumul <= 0.95,]
-##         df[a,"q95s"] <- min(tmp1$calBP)
-##         df[a,"q95e"] <- max(tmp1$calBP)
-##         wdth <- max(tmp1$calBP)-min(tmp1$calBP)
-##         df[a,"q68s"] <- min(tmp1$calBP) + (wdth*0.25)
-##         df[a,"q68e"] <- max(tmp1$calBP) - (wdth*0.25)
-##         df[a,"qMed"] <- round(mean(c(df[a,"q95s"],df[a,"q95e"])),0)
-##         df[a,"DateID"] <- as.character(x$metadata$DateID[a])
-##         df[a,"CRA"] <- x$metadata$CRA[a]
-##         df[a,"Error"] <- x$metadata$Error[a]
-##     }
-##     if (nrow(x$metadata)>1 & verbose){ close(pb) }
-##     class(df) <- append(class(df),"quickMarks")
-##     return(df)
-## }
-
-
-
 #' Smooth a numeric vector using a Gaussian window
 #' 
 #' @description Smooth a numeric vector using a Gaussian window
 #' @param x numeric vector of values to smooth.
 #' @param alpha numeric value controlling the size of the gaussian smoothing window. Proportional to the standard deviation of the Gaussian smoothing kernel where sd=(N-1)/(2*alpha) with N being the length of the input vector.
 #' @param window a fraction between 0 and 1 representing the proportion of the input vector to include in the moving window.
-#' @references
-#' Adapted from \code{\link[smoother]{smth.gaussian}}
+#' @details Adapted from \code{smth.gaussian} in the \code{smoother} package. 
+#' @references 
+#' Hamilton, N. (2015). smoother: Functions Relating to the Smoothing of Numerical Data, R package version 1.1, https://CRAN.R-project.org/package=smoother
 #' @examples
 #' smoothGauss(runif(200),alpha=5)
 #' @import stats
@@ -192,13 +150,14 @@ rangecheck <- function(x, bins, timeRange, datenormalised=FALSE){
 
 #' @title Convert BP dates to BC/AD format 
 #' @description Converts calibrated BP dates to BC/AD dates, omitting `year 0' 
-#' @param x A numerical vector (currently no checks that these numbers are in a sensible range). 
+#' @param x A numerical vector (currently only basic checks that these numbers are in a sensible range). 
 #' @return A vector with BC/BCE dates expressed as negative numbers and AD/CE dates as positive ones.
 #' @examples
 #' BPtoBCAD(4200)
 #' @export
 
 BPtoBCAD <- function(x){
+    if (any(x < 0)){ stop("Post-bomb dates (<0 BP) are not currently supported.") }
     res <- matrix(c(x, rep(NA,length(x))), ncol=2)
     res[x < 1950,2] <- 1950-res[x < 1950,1]
     res[x >= 1950,2] <- 1949-res[x >= 1950,1]
@@ -207,19 +166,20 @@ BPtoBCAD <- function(x){
 
 #' @title Convert BC/AD dates to BP format
 #' @description Converts BC/AD dates to BP format while handling the absence of 'year 0' 
-#' @param x A numerical vector (currently no checks that these numbers are in a sensible range).
-#' @return A vector with BC/BCE dates expressed as negative numbers and AD/CE dates as positive ones.
+#' @param x A numerical vector (currently only basic checks that these numbers are in a sensible range).
+#' @return A vector with BP dates.
 #' @examples
 #' BCADtoBP(-1268)
 #' @export
 
 BCADtoBP <- function(x){
+    if (any(x == 0)){ stop("0 BC/AD is not a valid year.") }
+    if (any(x > 1950)){ stop("Post-bomb dates (> AD 1950) are not currently supported.") }
     res <- matrix(c(x, rep(NA,length(x))), ncol=2)
     res[x > 0,2] <- abs(res[x > 0,1] - 1950)
     res[x < 0,2] <- abs(res[x < 0,1] - 1949)
     return(res[,2])
 }
-
 
 
 #' @title Computes the median date of each bin
@@ -367,55 +327,100 @@ spweights<-function(distmat,h=NULL,kernel="gaussian")
     return(res)   
 }
 
-#' @title Compute geometric growth rates from SPDs
+#' @title Computes rates of change from SPDs
 #'
-#' @description Function for computing the geometric growth rates between abutting user-defined time-blocks.
+#' @description Function for computing rates of change between abutting user-defined time-blocks.
 #'
 #' @param spd Summed Probability Distribution obtained using the \code{\link{spd}} function. 
 #' @param breaks A vector giving the breakpoints between the time-blocks.
+#' @param backsight A single numeric value defining the distance in time between the focal year and the backsight year for computing the rate of change.
+#' @param changexpr An expression defining how the rate of change is calculated, where \code{t1} is the summed probability for a focal block or year, \code{t0} is the summed probability for previous block or backsight year, and \code{d} is the duration of the block or the length of the backsight. Default is a geometric growth rate (i.e \code{expression((t2/t1)^(1/d)-1)}).
+#' @details When the argument \code{breaks} is supplied the function aggregates the summed probability within each time-block and compared them across abutting blocks using the expression defined by \code{changexpr}. When the argument \code{backsight} is provided he expression is based on the comparison between the summed probability of each year and the associated backsight year.  
 #'
-#' @details The function computes the growth rate between abutting phases as \eqn{(X_{t}/X_{t+1})^{(1/d)}-1}, where \eqn{X_{t}} is the summed probability of radiocarbon dates in the block \eqn{t}, and \eqn{d} is the duration of the time-blocks. 
-#'
-#' @return An object of class \code{spdGG} containing the total summed probability for each time-block and the geometric growth rate between abutting blocks.
+#' @return An object of class \code{spdRC}.
 #'
 #' @examples
 #' \dontrun{
 #' data(emedyd)
 #' caldates <- calibrate(x=emedyd$CRA, errors=emedyd$Error, normalised=FALSE, calMatrix=TRUE)
 #' bins <- binPrep(sites=emedyd$SiteName, ages=emedyd$CRA, h=50)
-#' emedyd.spd <- spd(caldates,bins,timeRange=c(16000,9000))
-#' emedyd.gg <- spd2gg(emedyd.spd,breaks=seq(16000,9000,-1000))
+#' emedyd.spd <- spd(caldates,bins,timeRange=c(16000,9000),runm=100)
+#' emedyd.gg <- spd2rc(emedyd.spd,breaks=seq(16000,9000,-1000))
+#' emedyd.gg2 <- spd2rc(emedyd.spd,backsight=10)
 #' plot(emedyd.gg)
+#' plot(emedyd.gg2)
 #' }
 
 #' @import stats
 #' @export
 
-spd2gg <- function(spd,breaks)
+spd2rc <- function(spd,breaks=NULL,backsight=NULL,changexpr=expression((t1/t0)^(1/d)-1))
 {
-	require(rcarbon)	
-	if (length(unique(round(abs(diff(breaks)))))!=1)
+	if (is.null(breaks)&is.null(backsight))
 	{
-		stop("Unequal break intervals is not supported")
-	}
-	nBreaks = length(breaks)-1
-	timeRange = eval(parse(text=spd$metadata[2]))
-	timeSequence = timeRange[1]:timeRange[2]
-	obs=numeric(length=nBreaks)    
-	for (x in 1:nBreaks)
-	{
-		index=which(timeSequence<=breaks[x]&timeSequence>breaks[x+1])
-		obs[x]=sum(spd$grid[index,2])
+		stop('Either breaks or backsight should be provided')
 	}
 
-	res=numeric(length=nBreaks-1)
-	for (i in 1:(nBreaks-1))
+	if (!is.null(breaks)&!is.null(backsight))
 	{
-		d=abs(breaks[i+1]-breaks[i]) 	
-		res[i]=(obs[i+1]/obs[i])^(1/d)-1
+		stop('Both breaks and backsight cannot be provided')
 	}
-	res=list(sumblock=obs,geomg=res,breaks=breaks)
-	class(res) <- append(class(res),"spdGG")
+
+	if (is.null(backsight))
+	{
+		if (length(unique(round(abs(diff(breaks)))))!=1)
+		{
+			stop("Unequal break intervals is not supported")
+		}
+		nBreaks = length(breaks)-1
+	}
+
+	timeRange = eval(parse(text=spd$metadata[2]))
+	timeSequence = timeRange[1]:timeRange[2]
+	
+	# if block based:
+	if(!is.null(breaks))
+	{
+		type='blocks'
+		obs=numeric(length=nBreaks)    
+		for (x in 1:nBreaks)
+		{
+			index=which(timeSequence<=breaks[x]&timeSequence>breaks[x+1])
+			obs[x]=sum(spd$grid[index,2])
+		}
+
+		res=numeric(length=nBreaks-1)
+		for (i in 1:(nBreaks-1))
+		{
+			d=abs(breaks[i+1]-breaks[i]) 	
+			t0 = obs[i]
+			t1 = obs[i+1]
+			res[i] = eval(changexpr)
+			if (t1==0|t0==0){res[i]=NA}
+			# 		res[i]=(obs[i+1]/obs[i])^(1/d)-1
+		}
+	}
+
+	# if backsight based:
+	if (!is.null(backsight))
+	{
+		type ='backsight'
+		breaks = NA
+		res=rep(NA,length(timeSequence))
+		obs=NA
+
+		for (i in 1:c(length(timeSequence)-backsight))
+		{
+			d=backsight 	
+			t0 = spd$grid$PrDens[i]
+			t1 = spd$grid$PrDens[i+backsight]
+			res[i+backsight] = eval(changexpr)
+			if (t1==0|t0==0){res[i+backsight]=NA}
+		}
+	}
+
+	res=list(sumblock=obs,roca=res,breaks=breaks,timeSequence=timeSequence,type=type)
+	class(res) <- append(class(res),"spdRC")
 	return(res)   
 }
 
@@ -434,61 +439,281 @@ curveSamples <- function(bins,calCurves,nsim)
 }
 
 
-# 
-# gaussW <- function(x, bw){
-#     exp(-(x^2)/(2*(bw^2)))
-# }
-# 
-# 
-# 
-# rybcolourmap <- function(range, ...) {
-#   col <- rybcolours(range, ...)
-#   z <- colourmap(col, range=range)
-#   return(z)
-# }
-# 
-# rybcolours <- function(range, sealevel=0, ncolours=100, nbeach=0){
-#   stopifnot(is.numeric(range) && length(range)==2)
-#   stopifnot(all(is.finite(range)))
-#   yr <- colorRampPalette(c("yellow","orangered","darkred"), space="rgb")
-#   cb <- colorRampPalette(c("blue","cyan","yellow"), space="rgb")
-#   depths <- range[1]
-#   peaks <- range[2]
-#   dv <- diff(range)/(ncolours - 1)
-#   epsilon <- nbeach * dv/2
-#   lowtide <- max(sealevel - epsilon, depths)
-#   hightide <-  min(sealevel + epsilon, peaks)
-#   countbetween <- function(a, b, delta) { max(0, round((b-a)/delta)) }
-#   nsea <- countbetween(depths, lowtide, dv)
-#   nbeach <- countbetween(lowtide,  hightide, dv)
-#   nland <- countbetween(hightide,  peaks, dv)
-#   colours <- character(0)
-#   if(nsea > 0)  colours <- cb(nsea) # cyan/blue
-#   if(nbeach > 0)  colours <- c(colours,rep("yellow",nbeach)) # yellow
-#   if(nland > 0)  colours <- c(colours, yr(nland)) # darkred/yellow
-#   return(colours)
-# }
-# 
-# spJitter <- function(pts, xamount, yamount=xamount){
-#     proj <- NA
-#     if (!is.na(proj4string(pts)) | proj4string(pts)!="NA"){
-#         proj <- proj4string(pts)
-#     }
-#     if (class(pts) == "SpatialPointsDataFrame"){
-#         df <- cbind(coordinates(pts),pts@data)
-#         df[,1] <- jitter(df[,1],amount=xamount)
-#         df[,2] <- jitter(df[,2],amount=yamount)
-#         coordinates(df) <- df[,1:2]
-#         proj4string(df) <- proj
-#     } else if (class(pts) == "SpatialPoints"){
-#         df <- coordinates(pts)
-#         df[,1] <- jitter(df[,1],amount=xamount)
-#         df[,2] <- jitter(df[,2],amount=yamount)
-#         df <- SpatialPoints(df, proj4string=CRS(proj))
-#     } else {
-#         stop("Only works for SpatialPoints* at present.")
-#     }
-#     return(df)
-# }
-# 
-# 
+#' @title Sample random calendar dates
+#'
+#' @description Randomly samples calendar dates from each calibrated date or bin.
+#' @param x A 'CalDates' class object. 
+#' @param bins A vector containing the bin names associated with each radiocarbon date. If set to NA, binning is not carried out. 
+#' @param nsim Number of sampling repetitions.
+#' @param boot A logical value indicating whether bootstrapping is carried out (see details below). Default is FALSE.
+#' @param verbose A logical variable indicating whether extra information on progress should be reported. Default is TRUE.
+#' @details The function randomly samples calendar dates based from calibrated probability distributions. When the \code{bins} argument is supplied a single calendar date is sampled from each bin. When \code{boot=TRUE}, dates (or bins) are randomly sampled with replacement before calendar dates are sampled. 
+#' 
+#' @return An object of class \code{simdates} with the following elements
+#' \itemize{
+#' \item{\code{sdates}} {A matrix containing the randomly sampled calendar dates, with rows containing each of the \code{nsim} repetitions.}
+#' \item{\code{weight}} {A vector (or matrix in when \code{boot=TRUE}) containing the total area under the curve of each date, normalised to sum to unity. Notice this will be identical for all dates if the calibration is carried out with the argument \code{normalised} set to TRUE.}
+#'}
+#'
+#' @import stats 
+#' @import utils 
+#' @export
+
+
+sampleDates <- function(x,bins=NA,nsim,boot=FALSE,verbose=TRUE)
+{
+	# initial checks ####
+	if (!"CalDates" %in% class(x)){
+		stop("x must be an object of class 'CalDates'.")
+	}
+	if (length(bins)>1){
+		if (any(is.na(bins))){
+			stop("Cannot have NA values in bins.")
+		}
+		if (length(bins)!=nrow(x$metadata)){
+			stop("bins (if provided) must be the same length as x.")
+		}
+	}
+	else {
+		bins <- 1:(length(x))
+	}
+	uni.bins = unique(bins)
+	nbins = length(uni.bins)
+	binList = vector('list',length=nbins)
+	binLength=numeric()
+	calmatrix=FALSE
+	if (anyNA(x$grids)){calmatrix=TRUE}
+	if (calmatrix)
+	{
+		warning("Processing time is slower when dates are calibrated using calMatrix=TRUE",immediate.=TRUE)
+	}
+	# Aggregate Bins ####
+	if (verbose){
+		flush.console()
+		print("Aggregating...")
+		pb <- txtProgressBar(min = 1, max = nbins,style = 3)
+	}
+	for (b in 1:nbins)
+	{
+		if (verbose){setTxtProgressBar(pb, b)}
+		tmp.dates=x[which(bins==uni.bins[b])]
+		if (calmatrix)
+		{
+			tmp.prob=tmp.dates$calmatrix
+			binLength[b]=1
+			if (length(tmp.dates)>1)
+			{	
+				tmp.prob=apply(tmp.dates$calmatrix,1,sum)
+				binLength[b]=ncol(tmp.dates$calmatrix)
+			}
+			tmp.prob=tmp.prob[which(tmp.prob>0)]
+			binList[[b]]=data.frame(calBP=as.numeric(names(tmp.prob)),PrDens=tmp.prob)
+		} else {
+			if (length(tmp.dates)==1)
+			{
+				binList[[b]]=tmp.dates$grids[[1]]
+				binLength[b]=1
+			} else {
+				binLength[b]=length(tmp.dates)
+				st.date = max(unlist(lapply(tmp.dates$grids,function(x){max(x$calBP)})))	
+				end.date = min(unlist(lapply(tmp.dates$grids,function(x){min(x$calBP)}))) 
+				tmp.prob = data.frame(calBP=st.date:end.date,PrDens=0)
+				tmp.prob$PrDens=apply(sapply(tmp.dates$grids,function(x,r){
+								     res = rep(0,length(r))
+								     res[which(r%in%x$calBP)]=x$PrDens
+								     return(res)},r=tmp.prob$calBP),1,sum)
+				binList[[b]]=tmp.prob
+			}
+		}
+	}
+	if (verbose) {close(pb)}
+	# Sample random dates ####
+	if (!boot)
+	{
+		if (verbose){print("Simulating dates ...")}
+		res=sapply(binList,function(x,nsim){sample(x$calBP,size=nsim,prob=x$PrDens,replace=TRUE)},nsim=nsim)
+		weight=sapply(binList,function(x){return(sum(x$PrDens))})/binLength
+		weight=weight/sum(weight)
+	}
+	if (boot)
+	{
+		res = matrix(NA,nrow=nsim,ncol=nbins)
+		weight = matrix(NA,nrow=nsim,ncol=nbins)
+		if (verbose){
+			print("Bootstrapping...")
+			pb <- txtProgressBar(min = 1, max = nsim,style = 3)
+		}
+		for (i in 1:nsim)
+		{
+			if (verbose){setTxtProgressBar(pb, i)}
+			index=sample(nbins,replace=TRUE)
+			res[i,]=sapply(binList[index],function(x,nsim){sample(x$calBP,size=1,prob=x$PrDens)})
+			weight[i,]=sapply(binList[index],function(x){sum(x$PrDens)})/binLength[index]
+			weight[i,]=weight[i,]/sum(weight[i,])
+		}
+		if (verbose) {close(pb)}
+	}
+	if (verbose){print("Done")}
+	result=list(sdates=res,weight=weight)
+	class(result) = c('simdates',class(result))
+	return(result)
+}
+
+#' @title Gaussian weighting of dates relative to 
+#' @description Rescale a numeric vector to a specified minimum and maximum.  
+#' @param x A numeric vector or an object of class CalDates.
+#' @param mean A single numeric value indicating the value to centre the Gaussian kernel on.
+#' @param sd A single numeric value indicating the standard deviation of the Gaussian kernel to be used.
+#' @param type The type of output to produce: currently either "weighted" (for a simple total weight value for each date) or "raw" (a list of reweighted calibrated radiocarbon probabilities for each calibrated date).
+#' @return A numeric vector of weights (or optionally a list of reweighted calibrated radiocarbon probabilities).
+#' @examples
+#' ## Example weighting fo a set of dates versus a focal date of 5950 calBP
+#' years <- seq(6500, 5500, -10)
+#' plot(cbind(years, gaussW(years, 5950, 50)))
+#' ## Example weighting of three calibrated dates  versus a focal date of 5950 calBP
+#' dates <- calibrate(c(5280, 5180, 5080), c(30,30,30), normalised=FALSE)
+#' gaussW(dates, 5950, 50)
+#' ## Or the same with raw output
+#' dateswt <- gaussW(dates, 5950, 50, type="raw")
+#' head(dateswt[[1]])
+#' @export
+#' 
+gaussW <- function(x, mean, sd, type="weights"){
+    if (!class(x)[1] %in% c("numeric", "CalDates")){
+        stop("Input must be a numeric vector of calibrated years BP or an object of class CalDates.")
+    }
+    if (!type %in% c("weights","raw")){ stop("type must be either weights or raw.") }
+    base <- (dnorm(x=mean, mean=mean, sd=sd))
+    if (class(x)[1]=="numeric"){
+        res <- dnorm(x=x, mean=mean, sd=sd) / base
+        return(res)
+    } else {
+        res <- vector(mode="list", length=length(x))
+        wts <- vector(mode="numeric", length=length(x))
+        for (a in 1: length(x)){
+            wt <- dnorm(x=x$grids[[a]]$calBP, mean=mean, sd=sd) / base
+            res[[a]] <- cbind(x$grids[[a]]$calBP, x$grids[[a]]$PrDens * wt)
+            wts[a] <- sum(x$grids[[a]]$PrDens * wt)
+        }
+    }
+    if (type=="raw"){
+        return(res)
+    } else if (type=="weights"){
+        return(wts)
+    }
+}
+
+rybcolourmap <- function(range, ...) {
+    ## slightly modified from beachcolourmap() in the spatstat package
+    col <- rybcolours(range, ...)
+    z <- colourmap(col, range=range)
+    return(z)
+}
+
+rybcolours <- function(range, sealevel=0, ncolours=100, nbeach=0){
+    ## modified from beachcolours() in the spatstat package
+    stopifnot(is.numeric(range) && length(range)==2)
+    stopifnot(all(is.finite(range)))
+    yr <- colorRampPalette(c("yellow","orangered","darkred"), space="rgb")
+    cb <- colorRampPalette(c("blue","cyan","yellow"), space="rgb")
+    depths <- range[1]
+    peaks <- range[2]
+    dv <- diff(range)/(ncolours - 1)
+    epsilon <- nbeach * dv/2
+    lowtide <- max(sealevel - epsilon, depths)
+    hightide <-  min(sealevel + epsilon, peaks)
+    countbetween <- function(a, b, delta) { max(0, round((b-a)/delta)) }
+    nsea <- countbetween(depths, lowtide, dv)
+    nbeach <- countbetween(lowtide,  hightide, dv)
+    nland <- countbetween(hightide,  peaks, dv)
+    colours <- character(0)
+    if(nsea > 0)  colours <- cb(nsea) # cyan/blue
+    if(nbeach > 0)  colours <- c(colours,rep("yellow",nbeach)) # yellow
+    if(nland > 0)  colours <- c(colours, yr(nland)) # darkred/yellow
+    return(colours)
+}
+
+#' @title Subsetting calibrated dates
+#' @description Subsets calibrated dates (\code{CalDates} class object) based on Logical expressions of time intervals.  
+#' @param x A CalDates class object
+#' @param s Logical expression indicating dates to keep. The expression should include the term \code{BP} which refers to specific dates.
+#' @param p Probability mass meeting the condition defined by \code{ss}.
+#' @param ... Further arguments to be passed to or from other methods (ignored).
+#' @details The function subsets \code{CalDates} class objects by identifying all dates that have a probability mass larger than \code{p} for a user defined logical expression of temporal interval containing the term \code{BP}, where \code{BP} refers to radiocarbon date. See examples for further detailes
+#' @return A CalDates class object.
+#' @examples
+#' ## Generate some calibrated dates
+#' x = calibrate(c(12100,5410,5320,3320),errors=c(20,20,30,30))
+#' ## Subsets all dates that have a probability mass above 0.8 before 10000 BP
+#' x2 = subset(x,BP>10000,p=0.8)
+#' ## Subsets all dates that have a probability mass above 0.5 between 6000 and 6300 BP
+#' x3 = subset(x,BP>6000&BP<6300,p=0.5)
+#' @import stats
+#' @export
+
+subset.CalDates=function(x,s,p,...)
+{
+	index=rep(NA,length(x))
+	s=substitute(s)
+	calmat=anyNA(x$calmatrix)
+	if (calmat)
+	{
+		for (i in 1:length(x))
+		{
+			tmp=x$grids[[i]]	 
+			BP=tmp$calBP
+			prdens=tmp$PrDens/sum(tmp$PrDens)   
+			sumprob=sum(prdens[eval(s)])
+			index[i]=sumprob>p
+		}
+	} else {
+		BP=as.numeric(row.names(x$calmatrix))
+		tmp=apply(x$calmatrix,2,function(x){x/sum(x)})
+		index=apply(tmp[eval(s),],2,sum)>p 
+	}
+	return(x[which(index)])
+}
+
+
+
+
+#' @title Which indices for calibrated dates
+#' @description Gives the TRUE indices of calibrated dates (\code{CalDates} class object) based on Logical expressions of time intervals.  
+#' @param x A CalDates class object
+#' @param s Logical expression indicating dates to keep. The expression should include the term \code{BP} which refers to specific dates.
+#' @param p Probability mass meeting the condition defined by \code{ss}.
+#' @details The function subsets \code{CalDates} class objects by identifying all dates that have a probability mass larger than \code{p} for a user defined logical expression of temporal interval containing the term \code{BP}, where \code{BP} refers to radiocarbon date. See examples for further detailes
+#' @return A CalDates class object.
+#' @examples
+#' ## Generate some calibrated dates
+#' x = calibrate(c(12100,5410,5320,3320),errors=c(20,20,30,30))
+#' ## Subsets all dates that have a probability mass above 0.8 before 10000 BP
+#' x2 = which.CalDates(x,BP>10000,p=0.8)
+#' ## Subsets all dates that have a probability mass above 0.5 between 6000 and 6300 BP
+#' x3 = which.CalDates(x,BP>6000&BP<6300,p=0.5)
+#' @import stats
+#' @export
+
+which.CalDates=function(x,s,p)
+{
+	index=rep(NA,length(x))
+	s=substitute(s)
+	calmat=anyNA(x$calmatrix)
+	if (calmat)
+	{
+		for (i in 1:length(x))
+		{
+			tmp=x$grids[[i]]	 
+			BP=tmp$calBP
+			prdens=tmp$PrDens/sum(tmp$PrDens)   
+			sumprob=sum(prdens[eval(s)])
+			index[i]=sumprob>p
+		}
+	} else {
+		BP=as.numeric(row.names(x$calmatrix))
+		tmp=apply(x$calmatrix,2,function(x){x/sum(x)})
+		index=apply(tmp[eval(s),],2,sum)>p 
+	}
+	return(which(index))
+}
+
