@@ -1,5 +1,9 @@
+#  Version 1.3.1 (in progress)
+* `binPrep()` now accepts alternative clustering algorithms
+* Refactoring of calibration related functions to increase readability
+* Minor bug fixes
 
-#  Version 1.3.0 (In Progress)
+#  Version 1.3.0 (12 December 2019)
 * UPDATEs in `modelTest()`:
   * Added an error message and a note in the help documentation warning users to not use calibration curves not supported by `uncalibrate()`.
   * NEW argument `gridclip` to add range constrain in the simulation envelope. When set to TRUE the sampling is executed within the observed range of dates.
