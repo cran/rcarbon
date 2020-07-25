@@ -39,9 +39,10 @@
 #' plot(x2)
 #' @import stats 
 #' @import utils 
+#' @import doSNOW 
+#' @import snow
 #' @import foreach 
-#' @import parallel  
-#' @import doParallel 
+#' @import iterators 
 #' @export
 
 calibrate <- function (x, ...) {
@@ -52,11 +53,11 @@ calibrate <- function (x, ...) {
 #' @export
 calibrate.default <- function(x, errors, ids=NA, dateDetails=NA, calCurves='intcal13', resOffsets=0 , resErrors=0, timeRange=c(50000,0), normalised=TRUE, F14C=FALSE, calMatrix=FALSE, eps=1e-5, ncores=1, verbose=TRUE, ...){
   
-  if (ncores>1&!requireNamespace("doParallel", quietly=TRUE)){	
-    warning("the doParallel package is required for multi-core processing; ncores has been set to 1")
+  if (ncores>1&!requireNamespace('doSNOW',quietly = TRUE)){
+    warning("the doSNOW package is required for multi-core processing; ncores has been set to 1")
     ncores=1
-  }	
-  
+  }
+
   # age and error checks
   if (length(x) != length(errors)){
     stop("Ages and errors (and ids/date details/offsets if provided) must be the same length.")
@@ -122,33 +123,37 @@ calibrate.default <- function(x, errors, ids=NA, dateDetails=NA, calCurves='intc
   if (length(resErrors)==1){ resErrors <- rep(resErrors,length(x)) }
   names(sublist) <- ids
   names(reslist) <- c("metadata","grids")
-  if (length(x)>1 & verbose){
+  opts = NULL
+  if (verbose){
     print("Calibrating radiocarbon ages...")
     flush.console()
-    pb <- txtProgressBar(min=1, max=length(x), style=3)
+    if (ncores>1){ print(paste("Running in parallel (standard calibration only) on ",getDoParWorkers()," workers...",sep=""))}
+    pb <- txtProgressBar(min=0, max=length(x), style=3)
+    progress <- function(n) setTxtProgressBar(pb, n)
+    opts <- list(progress = progress)
   }
   # calibration
   `%dofun%` <- `%do%`
   if (ncores>1){
     # parallellised
-    cl <- makeCluster(ncores)
-    registerDoParallel(cl)
-    if (verbose){ print(paste("Running in parallel (standard calibration only) on ",getDoParWorkers()," workers...",sep=""))}
+    cl <- snow::makeCluster(ncores)
+    registerDoSNOW(cl)
     `%dofun%` <- `%dopar%`
   }
   b <- NULL # Added to solve No Visible Binding for Global Variable NOTE
-  sublist <- foreach (b=1:length(x)) %dofun% {
+  sublist <- foreach (b=1:length(x),.options.snow = opts) %dofun% {
+    if (verbose & ncores==1) {setTxtProgressBar(pb, b)}
     calcurve <- cclist[[calCurves[b]]]
     calBP <- seq(max(calcurve),min(calcurve),-1)
     age <- x[b] - resOffsets[b]
-    error <- errors[b] + resErrors[b]
+    error <- sqrt(errors[b]^2 + resErrors[b]^2)
     if (F14C==FALSE)
     {  
       dens <- BP14C_calibration(age, error, calBP, calcurve, eps)
     }
     if (F14C==TRUE)
     {
-      dens <- F14C_calibration(age, error, calBP, calcurve)
+      dens <- F14C_calibration(age, error, calBP, calcurve, eps)
     }
     if (normalised){
       dens <- normalise_densities(dens, eps)
@@ -164,7 +169,7 @@ calibrate.default <- function(x, errors, ids=NA, dateDetails=NA, calCurves='intc
     return(res)
   }
   if (ncores>1){
-    stopCluster(cl)
+    snow::stopCluster(cl)
   }
   names(sublist) <- ids
   if (calMatrix){
@@ -272,9 +277,6 @@ calibrate.UncalGrid <- function(x, errors=0, calCurves='intcal13', timeRange=c(5
 #' uncalibrate(c(3050,2950))
 #' @import stats 
 #' @import utils 
-#' @import foreach 
-#' @import parallel  
-#' @import doParallel 
 #' @export
 
 uncalibrate <- function (x, ...) {
@@ -538,6 +540,19 @@ length.CalDates <- function(x,...)
 {
   return(nrow(x$metadata))
 }
+
+#' @title Computes the highest posterior density interval (HPDI) for calibrated dates 
+#' 
+#' @param x A \code{CalDates} class object.
+#' @param credMass Interval probability mass
+#' 
+#' @return A list of matrices with HPDI ranges in cal BP
+#' @examples
+#' x <- calibrate(c(3050,2950),c(20,20))
+#' hpdi(x)
+#' @seealso \code{\link{calibrate}}
+#' @export
+
 
 hpdi <- function(x, credMass=0.95){
   
