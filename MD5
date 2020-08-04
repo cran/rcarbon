@@ -1,5 +1,5 @@
-c8bab01853e8be3eaee72ded57a48c0e *DESCRIPTION
-b71f2bde99842b1e8d9ee2320739bf31 *NAMESPACE
+40ac3d75956df085e21916afa94b2928 *DESCRIPTION
+29bede621bf39e569fb4bf9443453778 *NAMESPACE
 0d141563aff27e5a562173deba36ff42 *R/aggregation.R
 5544da863a20b6fd2d04010e40fc2bda *R/calibration-helpers.R
 79e42d784a84cb8179d2d82ca228c46d *R/calibration.R
@@ -16,7 +16,7 @@ be851cae86a2ec012e184c1091c19601 *data/euroevol.rda
 c0f64ff8df95498255cfdf21c83169db *data/ewowin.rda
 a0365956c2b8dc0b2ca0a4e79cf36407 *inst/CITATION
 5a3429bf7eb9a790d19c8ea2851dcd3a *inst/doc/rcarbon.Rmd
-8d72fc190133ef2b1a963eda718fe863 *inst/doc/rcarbon.html
+355e8726c9af2e417d79ab6e3f9e8c4c *inst/doc/rcarbon.html
 63996f23ad588886b34c2c0293559e72 *inst/extdata/intcal13.14c
 2f70ecb759cb0b3a829c08d7da0c27be *inst/extdata/intcal13nhpine16.14c
 900120862fbafe83a87ff85c3d9ecb7a *inst/extdata/marine13.14c
@@ -78,7 +78,4 @@ c73ad2dea36bf7c330ef040cef24b2a3 *man/spd2rc.Rd
 0fa3dbeacc0a82c9afe6e0b93bc320c8 *man/thinDates.Rd
 e50624603811c80cc19cc804f7195c84 *man/uncalibrate.Rd
 b0c22e24adec68030aa40a712ecfa645 *man/which.CalDates.Rd
-6073920034a1c728548baec44509564a *tests/testthat.R
-03301960aa0a602913d43b7e9e8690a1 *tests/testthat/cal_5000_50.RDS
-38b91a78219d892cdfa8a3ad769c0d20 *tests/testthat/test-calibration.R
 5a3429bf7eb9a790d19c8ea2851dcd3a *vignettes/rcarbon.Rmd
