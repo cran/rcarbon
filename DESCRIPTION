@@ -1,6 +1,6 @@
 Package: rcarbon
 Title: Calibration and Analysis of Radiocarbon Dates
-Version: 1.3.3
+Version: 1.4.0
 Authors@R: c(person("Andrew","Bevan", role=c("aut"),email="andrew.bevan@gmail.com"),
 	     person("Enrico","Crema", role=c("aut","cre"),email="enrico.crema@gmail.com"),
 	     person("R. Kyle","Bocinsky",role=c("ctb"),email="bocinsky@gmail.com"),
@@ -19,7 +19,7 @@ VignetteBuilder: knitr
 RoxygenNote: 7.1.1
 Language: en-GB
 NeedsCompilation: no
-Packaged: 2020-08-04 08:59:50 UTC; enryu
+Packaged: 2020-08-24 16:22:19 UTC; enryu
 Author: Andrew Bevan [aut],
   Enrico Crema [aut, cre],
   R. Kyle Bocinsky [ctb],
@@ -28,4 +28,4 @@ Author: Andrew Bevan [aut],
   Fabio Silva [ctb]
 Maintainer: Enrico Crema <enrico.crema@gmail.com>
 Repository: CRAN
-Date/Publication: 2020-08-04 21:50:02 UTC
+Date/Publication: 2020-08-25 14:10:03 UTC
