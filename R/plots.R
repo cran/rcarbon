@@ -199,6 +199,7 @@ plot.CalDates <- function(x, ind=1, label=NA, calendar="BP", type="standard", xl
 #' @param cex.axis The magnification to be used for axis annotation relative to the current setting of cex. Default is adjusted to 1.
 #' @param ydisp Whether the y axis should be displayed. Ignored when \code{type} is set to \code{'b'}. Default is FALSE
 #' @param gapFactor Defines spacing between calibrated dates (when \code{type} is set to \code{'d'}) or the distance between the lines and the labels (when \code{type} is set to \code{'b'}) as proportion of individual y-axis ranges. Default is 0.2.
+#' @param rescale Whether probability distributions should be rescaled (applicable only when \code{type} is set to \code{'d'}, default is FALSE).
 #' @seealso \code{\link{calibrate}}
 #'
 #' @examples
@@ -214,7 +215,7 @@ plot.CalDates <- function(x, ind=1, label=NA, calendar="BP", type="standard", xl
 #' @export  
 
 
-multiplot<- function(x,type='d',calendar='BP',HPD=FALSE,credMass=0.95,decreasing=NULL,label=TRUE,xlim=NULL,xlab=NA,ylab=NA,col.fill='grey50',col.fill2='grey82',col.line='black',lwd=1,cex.id=1,cex.lab=1,cex.axis=1,ydisp=FALSE,gapFactor=0.2)
+multiplot<- function(x,type='d',calendar='BP',HPD=FALSE,credMass=0.95,decreasing=NULL,label=TRUE,xlim=NULL,xlab=NA,ylab=NA,col.fill='grey50',col.fill2='grey82',col.line='black',lwd=1,cex.id=1,cex.lab=1,cex.axis=1,ydisp=FALSE,gapFactor=0.2,rescale=FALSE)
 {
 
 	if(length(lwd)==1){lwd=rep(lwd,length(x))}
@@ -225,7 +226,11 @@ multiplot<- function(x,type='d',calendar='BP',HPD=FALSE,credMass=0.95,decreasing
 
 	if (!is.null(decreasing))
 	{
-		x = x[order(medCal(x),decreasing=decreasing)]
+	  ord = order(medCal(x),decreasing=decreasing)
+		x = x[ord]
+		col.line = col.line[ord]
+		col.fill = col.fill[ord]
+		col.fill2 = col.fill2[ord]
 	}
 
 	medDates = medCal(x)
@@ -279,11 +284,11 @@ multiplot<- function(x,type='d',calendar='BP',HPD=FALSE,credMass=0.95,decreasing
 	# Plot 
 	if (type=='b')
 	{
-		bse = hpdi(x,credMass=credMass)
+  		bse = hpdi(x,credMass=credMass)
 		plot(0,0,xlim=xlim,ylim=c(0,length(bse)+1),axes=F,xlab=xlabel,ylab="",type='n')
 		for (i in 1:length(bse))
 		{
-			tmp = bse[[i]]
+			tmp = matrix(bse[[i]][,-3],ncol=2)
 			if (calendar=='BP')
 			{
 				apply(tmp,1,function(x,y,lwd,col){lines(c(x),c(y,y),lwd=lwd,col=col)},y=i,lwd=lwd[i],col=col.line[i])
@@ -299,17 +304,24 @@ multiplot<- function(x,type='d',calendar='BP',HPD=FALSE,credMass=0.95,decreasing
 
 	if (type=='d')
 	{
-
-
 		if(anyNA(x$grids))
 		{
+		  if (rescale)
+		  {
+		    x$calmatrix=apply(x$calmatrix,2,reScale)
+		  }
 			tmp = apply(x$calmatrix,1,max)
 			ylim = as.numeric(c(0,tmp[which.max(tmp)]))
 		} else {
+		  if (rescale) 
+		  {
+		    for (i in 1:length(x))
+		    {
+		      x$grids[[i]]$PrDens = reScale(x$grids[[i]]$PrDens)
+		    }
+		  }
 			ylim = c(0,max(unlist(lapply(x$grids,function(x){max(x$PrDens)}))))
 		}
-
-		
 
 		# max ylim: combine ylim giving as a space 1/7 of the original distance
 		gap = abs(diff(ylim))*gapFactor
@@ -374,7 +386,8 @@ multiplot<- function(x,type='d',calendar='BP',HPD=FALSE,credMass=0.95,decreasing
 			{
 				xx = medDates[i]
 				if (calendar=='BCAD'){xx = BPtoBCAD(xx)}
-				text(x=xx,y=max(yvals)+gap/2,labels=x$metadata$DateID[i],cex=cex.id)
+				ylabel=ifelse(rescale,max(yvals)-0.5,max(yvals)+gap/2) 
+				text(x=xx,y=ylabel,labels=x$metadata$DateID[i],cex=cex.id)
 			}
 
 		}
@@ -1839,7 +1852,6 @@ plot.spdRC<- function(x,calendar="BP",col.obs="black", lwd.obs=0.5, xaxs="i", ya
 #' @import utils
 #' @method plot compositeKDE
 #' @export 
-
 plot.compositeKDE <- function(x, calendar="BP", type='envelope', ylim=NA, xlim=NA, fill.col='lightgrey',interval=0.95,line.col='black',line.type=2, multiline.alpha=NA, multiline.col='black',...){
 
     types <- c("envelope","multiline")
@@ -1882,18 +1894,26 @@ plot.compositeKDE <- function(x, calendar="BP", type='envelope', ylim=NA, xlim=N
         polygon(x=c(plotyears[index],rev(plotyears[index])),y=c(lo[index],rev(hi[index])),border=NA,col=fill.col)
 	lines(plotyears,avg,lty=line.type,col=line.col,lwd=2)
     }
+    
+    if(abs(diff(range(plotyears)))>10000){smallTickBreak=1000}
+    if(abs(diff(range(plotyears)))<10000){smallTickBreak=100}
+    if(abs(diff(range(plotyears)))<1000){smallTickBreak=10}
+    
     if (calendar=="BP"){
-	rr <- range(pretty(plotyears))    
-        axis(side=1,at=seq(rr[2],rr[1],-100),labels=NA,tck = -.01)
-        axis(side=1,at=pretty(plotyears),labels=abs(pretty(plotyears)))
+	      rr <- range(pretty(plotyears))
+	      rrSeq = seq(rr[2],rr[1],-smallTickBreak)
+	      rrSeq = rrSeq[which(rrSeq>=min(plotyears)&rrSeq<=max(plotyears))]
+        axis(side=1,at=rrSeq,labels=NA,tck = -.01)
+        axis(side=1,at=axTicks(1),labels=axTicks(1))
     } else if (calendar=="BCAD"){
-	yy <-  plotyears
+	      yy <-  plotyears
         rr <- range(pretty(yy))    
-        prettyTicks <- seq(rr[1],rr[2],+100)
-	prettyTicks[which(prettyTicks>=0)] <-  prettyTicks[which(prettyTicks>=0)]-1
+        prettyTicks <- seq(rr[1],rr[2],+smallTickBreak)
+      	prettyTicks[which(prettyTicks>=0)] <-  prettyTicks[which(prettyTicks>=0)]-1
+      	prettyTicks = prettyTicks[which(prettyTicks>=min(yy)&prettyTicks<=max(yy))]
         axis(side=1,at=prettyTicks, labels=NA,tck = -.01)
-        py <- pretty(yy)
-	pyShown <- py
+        py <- axTicks(1)
+      	pyShown <- py
 	if (any(pyShown==0)){pyShown[which(pyShown==0)]=1}
 	py[which(py>1)] <-  py[which(py>1)]-1
 	axis(side=1,at=py,labels=abs(pyShown))
