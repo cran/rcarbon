@@ -157,10 +157,11 @@ rangecheck <- function(x, bins, timeRange, datenormalised=FALSE){
 #' @export
 
 BPtoBCAD <- function(x){
-    if (any(x < 0)){ stop("Post-bomb dates (<0 BP) are not currently supported.") }
+    index <- !is.na(x)
+    if (any(x[index] < 0)){ stop("Post-bomb dates (<0 BP) are not currently supported.") }
     res <- matrix(c(x, rep(NA,length(x))), ncol=2)
-    res[x < 1950,2] <- 1950-res[x < 1950,1]
-    res[x >= 1950,2] <- 1949-res[x >= 1950,1]
+    res[index & x < 1950,2] <- 1950-res[index & x < 1950,1]
+    res[index & x >= 1950,2] <- 1949-res[index & x >= 1950,1]
     return(res[,2])
 }
 
@@ -173,11 +174,12 @@ BPtoBCAD <- function(x){
 #' @export
 
 BCADtoBP <- function(x){
-    if (any(x == 0)){ stop("0 BC/AD is not a valid year.") }
-    if (any(x > 1950)){ stop("Post-bomb dates (> AD 1950) are not currently supported.") }
+    index <- !is.na(x)
+    if (any(x[index] == 0)){ stop("0 BC/AD is not a valid year.") }
+    if (any(x[index] > 1950)){ stop("Post-bomb dates (> AD 1950) are not currently supported.") }
     res <- matrix(c(x, rep(NA,length(x))), ncol=2)
-    res[x > 0,2] <- abs(res[x > 0,1] - 1950)
-    res[x < 0,2] <- abs(res[x < 0,1] - 1949)
+    res[index & x > 0,2] <- abs(res[index & x > 0,1] - 1950)
+    res[index & x < 0,2] <- abs(res[index & x < 0,1] - 1949)
     return(res[,2])
 }
 
@@ -209,81 +211,114 @@ BCADtoBP <- function(x){
 #' @export
 
 binMed <- function(x,bins,verbose=TRUE){
-	if (!"CalDates" %in% class(x)){
-        stop("x must be an object of class 'CalDates'.")
+  if (!"CalDates" %in% class(x)){
+    stop("x must be an object of class 'CalDates'.")
+  }
+  if (length(bins)>1){
+    nbins <- length(unique(bins))
+    if (any(is.na(bins))){
+      stop("Cannot have NA values in bins.")
     }
-    if (length(bins)>1){
-        nbins <- length(unique(bins))
-        if (any(is.na(bins))){
-            stop("Cannot have NA values in bins.")
-        }
-        if (length(bins)!=nrow(x$metadata)){
-            stop("bins (if provided) must be the same length as x.")
-        }
+    if (length(bins)!=nrow(x$metadata)){
+      stop("bins (if provided) must be the same length as x.")
+    }
+  } else {
+    bins <- rep("0_0",nrow(x$metadata))
+  }
+  binNames <- unique(bins)
+  medbins = numeric(length=nbins)
+  caltimeRange =c(55000,0)
+  if (any(x$metadata$CalCurve %in% c("intcal13","shcal13","marine13","intcal13nhpine16","shcal13shkauri16")))
+  {
+    caltimeRange =c(50000,0)
+  }    
+  calyears <- data.frame(calBP=seq(caltimeRange[1], 0,-1))
+  
+  if (verbose){
+    if (length(x$calmatrix)>1){
+      print("Aggregating...")
     } else {
-        bins <- rep("0_0",nrow(x$metadata))
+      print("Extracting and aggregating...")
     }
-    binNames <- unique(bins)
-    caltimeRange =c(55000,0)
-    if (any(x$metadata$CalCurve %in% c("intcal13","shcal13","marine13","intcal13nhpine16","shcal13shkauri16")))
-    {
-      caltimeRange =c(50000,0)
-    }    
-    calyears <- data.frame(calBP=seq(caltimeRange[1], 0,-1))
-    binnedMatrix <- matrix(NA, nrow=nrow(calyears), ncol=length(binNames))
-    if (verbose){
-        if (length(x$calmatrix)>1){
-            print("Aggregating...")
-        } else {
-            print("Extracting and aggregating...")
-        }
+  }
+  
+  caldateTR <- as.numeric(x$metadata[1,c("StartBP","EndBP")])
+  caldateyears <- seq(caldateTR[1],caldateTR[2],-1)
+  
+  if (verbose & length(binNames)>1){
+    flush.console()
+    pb <- txtProgressBar(min=1, max=length(binNames), style=3)
+  }
+  
+  for (b in 1:length(binNames)){
+    
+    if (verbose & length(binNames)>1){ setTxtProgressBar(pb, b) }
+    index <- which(bins==binNames[b])
+    
+    if (length(x$calmatrix)>1){
+      tmp <- x$calmatrix[,index, drop=FALSE]
+      spdtmp <- rowSums(tmp)
+      if (length(binNames)>1){
+        spdtmp <- spdtmp / length(index)
+      }
+      spdtmp=spdtmp[caldateyears<=caltimeRange[1] & caldateyears>=0]
+    } else {
+    
+    slist <- x$grids[index]
+    slist <- lapply(slist,FUN=function(x) merge(calyears,x, all.x=TRUE)) 
+    slist <- rapply(slist, f=function(x) ifelse(is.na(x),0,x), how="replace")
+    slist <- lapply(slist, FUN=function(x) x[with(x, order(-calBP)), ])
+    tmp <- lapply(slist,`[`,2)
+    if (length(binNames)>1){
+      spdtmp <- Reduce("+", tmp) / length(index)
+    } else {
+      spdtmp <- Reduce("+", tmp)
     }
-    if (verbose & length(binNames)>1){
-        flush.console()
-        pb <- txtProgressBar(min=1, max=length(binNames), style=3)
+     spdtmp = spdtmp[,1]
     }
-    caldateTR <- as.numeric(x$metadata[1,c("StartBP","EndBP")])
-    caldateyears <- seq(caldateTR[1],caldateTR[2],-1)
-    check <- caldateTR[1] >= caltimeRange[1] & caldateTR[2] <= 0
-    for (b in 1:length(binNames)){
-        if (verbose & length(binNames)>1){ setTxtProgressBar(pb, b) }
-        index <- which(bins==binNames[b])
-        if (length(x$calmatrix)>1){
-            if (!check){
-                stop("The time range of the calibrated dataset must be at least as large as the spd time range.")
-            } else {
-                tmp <- x$calmatrix[,index, drop=FALSE]
-                spdtmp <- rowSums(tmp)
-                if (length(binNames)>1){
-                    spdtmp <- spdtmp / length(index)
-                }
-                binnedMatrix[,b] <- spdtmp[caldateyears<=caltimeRange[1] & caldateyears>=0]
-            }
-        } else {
-            slist <- x$grids[index]
-            slist <- lapply(slist,FUN=function(x) merge(calyears,x, all.x=TRUE)) 
-            slist <- rapply(slist, f=function(x) ifelse(is.na(x),0,x), how="replace")
-            slist <- lapply(slist, FUN=function(x) x[with(x, order(-calBP)), ])
-            tmp <- lapply(slist,`[`,2)
-            if (length(binNames)>1){
-                spdtmp <- Reduce("+", tmp) / length(index)
-            } else {
-                spdtmp <- Reduce("+", tmp)
-            }
-            binnedMatrix[,b] <- spdtmp[,1]
-        }
-    }
-close(pb)
-print("Done")
-cumcal=apply(binnedMatrix,2,cumsum)
+      cumcal=cumsum(spdtmp)
+      medbins[b]=caldateyears[which.min(abs(cumcal-max(cumcal)/2))]
+  }
+  if (verbose & length(binNames)>1){close(pb);print("Done")}
+  
+  return(medbins)
+}
 
-medbins=numeric()
-for (i in 1:nbins)
-{
-medbins[i] = calyears[which.min(abs(cumcal[,i]-max(cumcal[,i])/2)),1]
-}
-return(medbins)
-}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 #' @title Compute weights from distance matrix

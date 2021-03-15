@@ -473,8 +473,10 @@ plot.SpdModelTest <- function(x, calendar="BP", type='spd', ylim=NA, xlim=NA, co
 	 stop("The argument 'type' should be either 'spd' or 'roc'.")
 	}
 
+	naindex = numeric()
 	if (type=='roc')
 	{
+	  naindex = which(is.na(x$result.roc$roc))
 		obs <- x$result.roc[,1:2]
 		envelope <- x$result.roc[,3:4]
 		colnames(obs)<-c("calBP","PrDens")
@@ -611,7 +613,12 @@ plot.SpdModelTest <- function(x, calendar="BP", type='spd', ylim=NA, xlim=NA, co
 		}
 	}
 
-	polygon(x=c(obs[,"Years"],rev(obs[,"Years"])),y=c(envelope[,1],rev(envelope[,2])),col=rgb(0,0,0,0.2),border=NA)
+	if (length(naindex)>0)
+	{polygon(x=c(obs[-naindex,"Years"],rev(obs[-naindex,"Years"])),y=c(envelope[-naindex,1],rev(envelope[-naindex,2])),col=rgb(0,0,0,0.2),border=NA)
+	} else
+	{
+	  polygon(x=c(obs[,"Years"],rev(obs[,"Years"])),y=c(envelope[,1],rev(envelope[,2])),col=rgb(0,0,0,0.2),border=NA)
+	}
 	if (drawaxes & bbty != "n" & calendar=="BP"){
 		rr <- range(pretty(obs[,"Years"]))    
 		axis(side=1,at=seq(rr[2],rr[1],-100),labels=NA,tck = -.01)
@@ -1163,6 +1170,12 @@ plot.stackCalSPD <- function(x, type='stacked', calendar='BP', spdnormalised=FAL
 	{
 
 		PrDens=prop.table(PrDens,1)
+		NAyears = numeric(length=0)
+		if (any(is.nan(apply(PrDens,1,sum))))
+		{
+		  NAyears = which(is.nan(apply(PrDens,1,sum)))
+		  PrDens[NAyears,]=0
+		}
 		if (nsets>1)
 		{
 			PrDens = t(apply(PrDens,1,cumsum))
@@ -1175,6 +1188,18 @@ plot.stackCalSPD <- function(x, type='stacked', calendar='BP', spdnormalised=FAL
 		{
 			polygon(c(plotyears,rev(plotyears)),c(PrDens[,i],rev(PrDens[,i-1])),col=col.fill[i-1],lwd=lwd.obs[i-1],lty=lty.obs[i-1],border=col.fill[i-1])
 		}
+		
+		if(length(NAyears>0))
+		{
+		  ii = which(diff(NAyears)>1)
+		  ii = c(0,ii)
+		  for (k in 1:c(length(ii)-1))
+		  {
+		    index = (ii[k]+1):ii[k+1]
+		  polygon(c(plotyears[NAyears[index]],rev(plotyears[NAyears[index]])),c(rep(-0.02,length(index)),rep(1.02,length(index))),col='white',border='white')
+		  }
+		}
+		
 		if (legend)
 		{
 			if (is.null(legend.arg))
