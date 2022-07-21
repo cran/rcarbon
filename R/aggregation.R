@@ -144,7 +144,7 @@ thinDates <- function(ages, errors, bins, size, thresh=0.5, method="random", see
 #' @export
 
 spd <- function(x,timeRange, bins=NA, datenormalised=FALSE, spdnormalised=FALSE, runm=NA, verbose=TRUE, edgeSize=500){
-    
+    display.timeRange = timeRange
     defcall <- as.list(args(spd))
     defcall <- defcall[-length(defcall)]
     speccall <- as.list(match.call())
@@ -191,8 +191,8 @@ spd <- function(x,timeRange, bins=NA, datenormalised=FALSE, spdnormalised=FALSE,
 	    {
 		stop(paste0("timeRange beyond calibration curve. Ensure that timeRange[1]+edgeSize is smaller than ", caltimeRange[1]," and timeRange[2]-edgeSize is larger than 0"))
 	    }
-	    timeRange[1]=ccrange[2]
-	    timeRange[2]=ccrange[1]
+	    timeRange[1]=max(ccrange[2],true.timeRange[1])
+	    timeRange[2]=min(ccrange[1],true.timeRange[2])
     }	
     calyears <- data.frame(calBP=seq(timeRange[1], timeRange[2],-1))
     binnedMatrix <- matrix(NA, nrow=nrow(calyears), ncol=length(binNames))
@@ -252,17 +252,11 @@ spd <- function(x,timeRange, bins=NA, datenormalised=FALSE, spdnormalised=FALSE,
 
     finalSPD <- apply(binnedMatrix,1,sum)
 
-    if (datenormalised)
-    {
-	    timeRange=true.timeRange
-    }	    
-
-    
     if (!is.na(runm)){
         finalSPD <- runMean(finalSPD, runm, edge="fill")
     }
     res <- data.frame(calBP=calyears$calBP, PrDens=finalSPD)
-    res <- res[res$calBP <= timeRange[1] & res$calBP >= timeRange[2],]
+    res <- res[res$calBP <= display.timeRange[1] & res$calBP >= display.timeRange[2],]
     if (spdnormalised){
         res$PrDens <- res$PrDens/sum(res$PrDens, na.rm=TRUE)
     }
@@ -281,7 +275,7 @@ spd <- function(x,timeRange, bins=NA, datenormalised=FALSE, spdnormalised=FALSE,
 #' @param x A \code{CalDates} class object containing the calibrated radiocarbon dates.
 #' @param timeRange A vector of length 2 indicating the start and end date of the analysis in cal BP.
 #' @param bins A vector containing the bin names associated with each radiocarbon date. If set to NA, binning is not carried out. 
-#' @param group A vector containing the grouping variable.
+#' @param group A character or factor vector containing the grouping variable. 
 #' @param datenormalised Controls for calibrated dates with probability mass outside the timerange of analysis. If set to TRUE the total probability mass within the time-span of analysis is normalised to sum to unity. Should be set to FALSE when the parameter \code{normalised} in \code{\link{calibrate}} is set to FALSE. Default is FALSE. 
 #' @param runm A number indicating the window size of the moving average to smooth the SPD. If set to \code{NA} no moving average is applied. Default is NA  
 #' @param verbose A logical variable indicating whether extra information on progress should be reported. Default is TRUE.
@@ -305,12 +299,15 @@ stackspd <- function(x, timeRange, bins=NA, group=NULL, datenormalised=FALSE, ru
 		stop("The argument group must be provided")
 	}
 
-	stackLength = length(unique(group))
-
+	if (!any(class(group)=='factor'))
+	{
+		warning("The group argument has been transformed into a factor")
+		group = as.factor(group)
+	}
 
 	## Main for Loop
 
-	stackG = unique(group)
+	stackG = levels(group)
 	stackL = length(stackG)
 	stackedSPDs = vector("list",length=stackL)
 	names(stackedSPDs) = stackG
