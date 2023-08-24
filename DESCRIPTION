@@ -1,6 +1,6 @@
 Package: rcarbon
 Title: Calibration and Analysis of Radiocarbon Dates
-Version: 1.5.0
+Version: 1.5.1
 Authors@R: c(person("Andrew","Bevan", role=c("aut"),email=c("andrew.bevan@gmail.com"),comment=c(ORCID="0000-0001-7967-3117")),
 	     person("Enrico","Crema", role=c("aut","cre"),email=c("enrico.crema@gmail.com"),comment=c(ORCID="0000-0001-6727-5138")),
 	     person("R. Kyle","Bocinsky",role=c("ctb"),email="bocinsky@gmail.com"),
@@ -19,10 +19,10 @@ License: GPL (>= 2)
 Encoding: UTF-8
 LazyData: true
 VignetteBuilder: knitr
-RoxygenNote: 7.2.0
+RoxygenNote: 7.2.3
 Language: en-GB
 NeedsCompilation: no
-Packaged: 2022-11-20 21:56:12 UTC; erc62
+Packaged: 2023-08-24 09:14:28 UTC; erc62
 Author: Andrew Bevan [aut] (<https://orcid.org/0000-0001-7967-3117>),
   Enrico Crema [aut, cre] (<https://orcid.org/0000-0001-6727-5138>),
   R. Kyle Bocinsky [ctb],
@@ -31,4 +31,4 @@ Author: Andrew Bevan [aut] (<https://orcid.org/0000-0001-7967-3117>),
   Fabio Silva [ctb]
 Maintainer: Enrico Crema <enrico.crema@gmail.com>
 Repository: CRAN
-Date/Publication: 2022-11-21 09:00:02 UTC
+Date/Publication: 2023-08-24 11:20:10 UTC

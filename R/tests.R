@@ -304,7 +304,7 @@ modelTest <- function(x, errors, nsim, bins=NA, runm=NA, timeRange=NA,backsight=
     }
 
 
-        tmp <- calibrate(x=unlist(randomDates),errors=randomSDs, timeRange=timeRange, calCurves=ccurve.tmp, normalised=normalised, ncores=1, verbose=FALSE, calMatrix=TRUE) 
+        suppressWarnings(tmp <- calibrate(x=unlist(randomDates),errors=randomSDs, timeRange=timeRange, calCurves=ccurve.tmp, normalised=normalised, ncores=1, verbose=FALSE, calMatrix=TRUE))
 
         simDateMatrix <- tmp$calmatrix 
 	sim[,s] <- apply(simDateMatrix,1,sum) 
@@ -343,7 +343,7 @@ modelTest <- function(x, errors, nsim, bins=NA, runm=NA, timeRange=NA,backsight=
 		    randomSDs <- sample(size=length(unlist(randomDates)), errors, replace=TRUE) 
 
 
-		    tmp <- calibrate(x=unlist(randomDates),errors=randomSDs, timeRange=timeRange, calCurves=ccurve.tmp, normalised=normalised, ncores=1, verbose=FALSE, calMatrix=TRUE) 
+		    suppressWarnings(tmp <- calibrate(x=unlist(randomDates),errors=randomSDs, timeRange=timeRange, calCurves=ccurve.tmp, normalised=normalised, ncores=1, verbose=FALSE, calMatrix=TRUE))
 
 		    simDateMatrix <- tmp$calmatrix
 		    aux <- apply(simDateMatrix,1,sum)
@@ -821,6 +821,11 @@ sptest<-function(calDates, timeRange, bins, locations, locations.id.col=NULL,bre
 		locations.id=row.names(locations)
 	} else {
 		locations.id=locations[[which(colnames(locations)==locations.id.col)]]
+	}
+
+	if (any(duplicated(locations.id)))
+	{
+		stop('"locations" contains duplicate ids')
 	}
 
 	tmpbintosite = unlist(lapply(strsplit(bins,"_"),function(x){x[1]}))
